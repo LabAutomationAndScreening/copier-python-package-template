@@ -12,6 +12,8 @@ class ContextUpdater(ContextHook):
         context["pre_commit_version"] = "4.0.1"
         context["pyright_version"] = "1.1.390"
         context["pytest_version"] = "8.3.4"
+        context["copier_version"] = "9.4.1"
+        context["copier_templates_extension_version"] = "0.3.0"
 
         context["gha_checkout"] = "v4.2.2"
         context["gha_setup_python"] = "v5.3.0"
