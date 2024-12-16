@@ -1,6 +1,9 @@
 # Changes here will be overwritten by Copier
-_commit: 2a2a0a2
+_commit: 95b06f2
 _src_path: gh:LabAutomationAndScreening/copier-base-template.git
+python_ci_versions:
+- 3.12.8
+- 3.13.1
 python_version: 3.13.1
 repo_name: copier-python-package-template
 ssh_port_number: 55874
