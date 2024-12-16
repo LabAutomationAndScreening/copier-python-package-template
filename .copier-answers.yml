@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier
-_commit: 495d993
+_commit: 7081f31
 _src_path: gh:LabAutomationAndScreening/copier-base-template.git
 python_ci_versions:
 - 3.12.8
