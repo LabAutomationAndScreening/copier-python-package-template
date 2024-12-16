@@ -5,3 +5,4 @@ ssh_port_number: 12345
 # Data added based on the specifics of this template
 python_ci_versions:
   - 3.11.11
+package_name: foo-bar
