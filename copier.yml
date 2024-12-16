@@ -24,6 +24,10 @@ python_ci_versions:
 
 # Questions specific to this template
 
+package_name:
+    type: str
+    help: What is the (kebab-case) name that you want to call this package?
+    default: "{{ repo_name }}"
 
 # Additional Settings
 _min_copier_version: "9.4"
