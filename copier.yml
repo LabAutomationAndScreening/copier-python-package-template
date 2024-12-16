@@ -27,7 +27,7 @@ python_ci_versions:
 package_name:
     type: str
     help: What is the (kebab-case) name that you want to call this package?
-    default: "{{ repo_name }}"
+    default: "{{ repo_name.replace('_', '-') }}"
 
 # Additional Settings
 _min_copier_version: "9.4"
