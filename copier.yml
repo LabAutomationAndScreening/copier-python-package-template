@@ -10,10 +10,11 @@ ssh_port_number:
 
 
 # Questions specific to this template
+
 python_version:
     type: str
     help: What version of Python is used for development?
-    default: "{% endraw %}{{ python_version }}{% raw %}"
+    default: "3.13.1"
 
 python_ci_versions:
     type: str
