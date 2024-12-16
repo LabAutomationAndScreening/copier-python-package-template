@@ -3,3 +3,6 @@ repo_name: another_repo
 ssh_port_number: 54321
 
 # Data added based on the specifics of this template
+python_ci_versions:
+  - "3.12.8"
+  - "3.13.1"
