@@ -1,0 +1,20 @@
+{% raw %}[project]
+name = "{% endraw %}{{ repo_name | replace('_', '-') }}{% raw %}"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">={% endraw %}{{ python_version }}{% raw %}"
+dependencies = [
+
+]
+
+
+[dependency-groups]
+dev = [
+    # Specific to this template
+
+
+    # Managed by upstream template
+    "pyright>={% endraw %}{{ pyright_version }}{% raw %}",
+    "pytest>={% endraw %}{{ pytest_version }}{% raw %}"
+]{% endraw %}
