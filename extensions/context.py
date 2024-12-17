@@ -1,5 +1,6 @@
 # adapted from https://github.com/copier-org/copier-templates-extensions#context-hook-extension
 from typing import Any
+from typing import override
 
 from copier_templates_extensions import ContextHook
 
@@ -7,6 +8,7 @@ from copier_templates_extensions import ContextHook
 class ContextUpdater(ContextHook):
     update = False
 
+    @override
     def hook(self, context: dict[Any, Any]) -> dict[Any, Any]:
         context["uv_version"] = "0.5.9"
         context["pre_commit_version"] = "4.0.1"
