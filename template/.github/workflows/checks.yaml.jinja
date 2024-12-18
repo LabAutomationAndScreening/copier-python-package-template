@@ -57,6 +57,11 @@ jobs:
 {% endraw %}{% for item in python_ci_versions %}
           - {{ item }}
 {% endfor %}{% raw %}
+        include:
+          # only enable coverage on the fastest job
+          - os: "{% endraw %}{{ gha_linux_runner }}{% raw %}"
+            python-version: "{% endraw %}{{ python_ci_versions[-1] }}{% raw %}"
+            IS_FASTEST_JOB: true
 
     runs-on: ${{ matrix.os }}
 
@@ -70,7 +75,18 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Unit test
-        run: uv run pytest
+        run: uv run pytest --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        # only upload coverage from fastest job
+        if: matrix.IS_FASTEST_JOB == true
+        uses: codecov/codecov-action@v5.1.1
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          env_vars: OS,PYTHON
+          name: codecov-umbrella
+          fail_ci_if_error: true
 
 
 
