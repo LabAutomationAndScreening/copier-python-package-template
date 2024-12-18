@@ -8,3 +8,4 @@ python_ci_versions:
   - 3.11.11
 package_name: foo-bar
 primary_author: George Washington
+full_repo_url: https://www.github.com/foobar
