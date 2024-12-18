@@ -7,3 +7,4 @@ ssh_port_number: 12345
 python_ci_versions:
   - 3.11.11
 package_name: foo-bar
+primary_author: George Washington

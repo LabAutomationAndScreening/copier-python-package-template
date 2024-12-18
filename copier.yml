@@ -33,6 +33,11 @@ package_name:
     help: What is the (kebab-case) name that you want to call this package?
     default: "{{ repo_name.replace('_', '-') }}"
 
+primary_author:
+    type: str
+    help: Who is the primary author of this project?
+
+
 # Additional Settings
 _min_copier_version: "9.4"
 
