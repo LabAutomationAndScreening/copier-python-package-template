@@ -8,6 +8,12 @@ authors = [
 ]
 readme = "README.md"
 requires-python = ">={% endraw %}{{ python_version }}{% raw %}"
+classifiers = [
+    "Programming Language :: Python :: 3",
+{% endraw %}{% for item in python_ci_versions %}
+    {% raw %}"Programming Language :: Python :: {% endraw %}{{ item.split('.')[:2] | join('.') }}{% raw %}",{% endraw %}
+{% endfor %}{% raw %}
+]
 dependencies = [
 
 ]
