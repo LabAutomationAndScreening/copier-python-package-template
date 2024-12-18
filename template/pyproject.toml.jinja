@@ -2,6 +2,10 @@
 name = "{% endraw %}{{ package_name | replace('_', '-') }}{% raw %}"
 version = "0.1.0"
 description = "{% endraw %}{{ description }}{% raw %}"
+authors = [
+    {name = "{% endraw %}{{ primary_author }}{% raw %}"},
+
+]
 readme = "README.md"
 requires-python = ">={% endraw %}{{ python_version }}{% raw %}"
 dependencies = [
