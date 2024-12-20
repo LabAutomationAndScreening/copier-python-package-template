@@ -41,6 +41,11 @@ full_repo_url:
     type: str
     help: Full URL, beginning with https but no trailing slash
 
+create_docs:
+    type: bool
+    help: Do you want to create documentation for this project?
+    default: true
+
 
 # Additional Settings
 _min_copier_version: "9.4"
