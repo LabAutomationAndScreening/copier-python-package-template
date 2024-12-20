@@ -62,7 +62,7 @@ jobs:
           - "ubuntu-24.04"
         python-version:
 
-          - 3.12.8
+          - 3.12.7
 
           - 3.13.1
 
