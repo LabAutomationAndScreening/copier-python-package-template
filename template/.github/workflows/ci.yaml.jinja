@@ -88,15 +88,38 @@ jobs:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: {% endraw %}{{ full_repo_url | replace("https://github.com/", "") }}{% raw %}
+{% endraw %}{% if create_docs %}{% raw %}
+  build-docs:
+    needs: [ lint ]
+    strategy:
+      matrix:
+        python-version:
+{% endraw %}{% for item in python_ci_versions %}
+          - {{ item }}
+{% endfor %}{% raw %}
 
+    runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
 
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@{% endraw %}{{ gha_checkout }}{% raw %}
+
+      - name: Install python tooling
+        uses: ./.github/actions/install_deps_uv
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Build docs
+        working-directory: ./docs
+        run: uv run make html
+{% endraw %}{% endif %}{% raw %}
 
   required-check:
     runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
-    needs: [ test ]
+    needs: [ test{% endraw %}{% if create_docs %}, build-docs{% endif %}{% raw %} ]
     if: always()
     steps:
       - name: fail if prior job failure
-        if: needs.test.result != 'success'
+        if: needs.test.result != 'success'{% endraw %}{% if create_docs %} || needs.build-docs.result != 'success'{% endif %}{% raw %}
         run: |
           exit 1{% endraw %}
