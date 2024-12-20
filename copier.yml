@@ -44,7 +44,7 @@ full_repo_url:
 create_docs:
     type: bool
     help: Do you want to create documentation for this project?
-    default: true
+    default: yes
 
 
 # Additional Settings

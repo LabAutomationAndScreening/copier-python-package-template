@@ -9,4 +9,4 @@ python_ci_versions:
 package_name: foo-bar
 primary_author: George Washington
 full_repo_url: https://www.github.com/foobar
-create_docs: false
+create_docs: no

@@ -10,4 +10,4 @@ python_ci_versions:
 package_name: the-amazing-library
 primary_author: John Williams
 full_repo_url: https://www.github.com/baz
-create_docs: true
+create_docs: yes
