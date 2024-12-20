@@ -15,7 +15,7 @@ ssh_port_number:
 python_version:
     type: str
     help: What version of Python is used for development?
-    default: "3.13.1"
+    default: "3.12.7"
 
 python_ci_versions:
     type: str

@@ -3,7 +3,7 @@ name = "copier-python-package-template"
 version = "0.1.0"
 description = "Copier template for creating Python libraries and executables"
 readme = "README.md"
-requires-python = ">=3.13.1"
+requires-python = ">=3.12.7"
 dependencies = [
     # Managed by upstream template
     "pytest>=8.3.4",
