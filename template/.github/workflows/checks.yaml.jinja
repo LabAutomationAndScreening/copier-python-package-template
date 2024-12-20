@@ -58,10 +58,9 @@ jobs:
           - {{ item }}
 {% endfor %}{% raw %}
         include:
-          # only enable coverage on the fastest job
           - os: "{% endraw %}{{ gha_linux_runner }}{% raw %}"
-            python-version: "{% endraw %}{{ python_ci_versions[-1] }}{% raw %}"
-            IS_FASTEST_JOB: true
+            python-version: "{% endraw %}{{ python_ci_versions[0] }}{% raw %}"
+            JOB_MATCHING_DEV_ENV: true
 
     runs-on: ${{ matrix.os }}
 
@@ -79,7 +78,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         # only upload coverage from fastest job
-        if: matrix.IS_FASTEST_JOB == true
+        if: matrix.JOB_MATCHING_DEV_ENV == true
         uses: codecov/codecov-action@v5.1.1
         with:
           files: ./coverage.xml
