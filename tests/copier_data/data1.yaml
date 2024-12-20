@@ -5,7 +5,7 @@ ssh_port_number: 12345
 
 # Data added based on the specifics of this template
 python_ci_versions:
-  - 3.11.10
+  - 3.12.7
 package_name: foo-bar
 primary_author: George Washington
 full_repo_url: https://www.github.com/foobar
