@@ -26,6 +26,7 @@ class ContextUpdater(ContextHook):
         context["gha_upload_artifact"] = "v4.4.3"
         context["gha_mutex"] = "d3d5b354d460d4b6a1e3ee5b7951678658327812 # v1.0.0-alpha.9"
         context["gha_linux_runner"] = "ubuntu-24.04"
+        context["gha_windows_runner"] = "windows-2022"
 
         context["py311_version"] = ""
         context["py312_version"] = "3.12.7"
