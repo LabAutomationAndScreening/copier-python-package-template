@@ -53,6 +53,7 @@ jobs:
       matrix:
         os:
           - "{% endraw %}{{ gha_linux_runner }}{% raw %}"
+{% endraw %}{% if use_windows_in_ci %}          - {{ gha_windows_runner }}{% endif %}{% raw %}
         python-version:
 {% endraw %}{% for item in python_ci_versions %}
           - {{ item }}
