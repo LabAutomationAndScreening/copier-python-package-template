@@ -4,7 +4,7 @@ services:
     build:
       context: .
       args:
-        VENV_PATH: /workspaces/copier-python-package-template/.venv
+        REPO_NAME: copier-python-package-template
     # You can run `devcontainer-info content-url` in codespaces to see what image base is
     volumes:
       - ..:/workspaces/copier-python-package-template:cached
