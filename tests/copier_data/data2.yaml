@@ -14,3 +14,11 @@ aws_development_account_id: 000321456870
 
 
 # Data added based on the specifics of this template
+
+python_ci_versions:
+  - "3.12.7"
+  - "3.13.1"
+package_name: the-amazing-library
+primary_author: John Williams
+full_repo_url: https://www.github.com/baz
+create_docs: yes
