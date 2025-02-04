@@ -32,6 +32,9 @@ dev = [
     "sphinx=={% endraw %}{{ sphinx_version }}{% raw %}",
 ]
 
+[tool.setuptools]
+license-files = [] # kludge until this bug is fixed https://github.com/pypa/setuptools/issues/4759
+
 [tool.uv]
 package = true
 
