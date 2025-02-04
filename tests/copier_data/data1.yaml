@@ -4,10 +4,9 @@ description: Doing amazing things
 ssh_port_number: 12345
 use_windows_in_ci: false
 
+aws_identity_center_id: d-9145c20053
+aws_production_account_id: 123456789012
+use_staging_environment: false
+
+
 # Data added based on the specifics of this template
-python_ci_versions:
-  - 3.12.7
-package_name: foo-bar
-primary_author: George Washington
-full_repo_url: https://www.github.com/foobar
-create_docs: no
