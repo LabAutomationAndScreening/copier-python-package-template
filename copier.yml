@@ -52,6 +52,11 @@ create_docs:
     help: Do you want to create documentation for this project?
     default: yes
 
+is_frozen_executable:
+    type: bool
+    help: Is this project a frozen executable (instead of a PyPI-compatible library)?
+    default: no
+
 
 # Additional Settings
 _min_copier_version: "9.4"

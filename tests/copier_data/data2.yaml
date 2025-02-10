@@ -22,3 +22,4 @@ package_name: the-amazing-library
 primary_author: John Williams
 full_repo_url: https://www.github.com/baz
 create_docs: yes
+is_frozen_executable: no
