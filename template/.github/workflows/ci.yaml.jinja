@@ -96,7 +96,8 @@ jobs:
         uses: actions/upload-artifact@{% endraw %}{{ gha_upload_artifact }}{% raw %}
         with:
           name: exe-${{ runner.os }}-${{ matrix.python-version }}
-          path: dist/{% endraw %}{% endif %}{% raw %}
+          path: dist/
+          if-no-files-found: error{% endraw %}{% endif %}{% raw %}
 {% endraw %}{% if create_docs %}{% raw %}
   build-docs:
     needs: [ lint ]
