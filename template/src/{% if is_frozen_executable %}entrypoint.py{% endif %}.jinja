@@ -1,6 +1,8 @@
-{% raw %}import sys
+{% raw %}import sys  # pragma: no cover # we can't unit test the entrypoint itself. It is tested in the E2E test of the executable itself
 
-from {% endraw %}{{ package_name.replace('-', '_') }}{% raw %}.main import main
+from {% endraw %}{{ package_name.replace('-', '_') }}{% raw %}.main import (
+    main,
+)  # pragma: no cover # we can't unit test the entrypoint itself. It is tested in the E2E test of the executable itself
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:])){% endraw %}
