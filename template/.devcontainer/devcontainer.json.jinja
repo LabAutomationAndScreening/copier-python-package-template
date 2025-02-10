@@ -10,6 +10,7 @@
     "ghcr.io/devcontainers/features/python:1": {
       // https://github.com/devcontainers/features/tree/main/src/python
       "version": "{% endraw %}{{ python_version }}{% raw %}",
+{% endraw %}{% if is_frozen_executable %}{% raw %}      "enableShared": true,{% endraw %}{% endif %}{% raw %}
       "installTools": false,
       "optimize": true
     }
