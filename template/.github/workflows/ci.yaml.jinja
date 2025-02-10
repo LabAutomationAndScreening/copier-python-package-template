@@ -89,6 +89,14 @@ jobs:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: {% endraw %}{{ full_repo_url | replace("https://github.com/", "") }}{% raw %}
+{% endraw %}{% if is_frozen_executable %}{% raw %}      - name: Build executable
+        run: uv run pyinstaller pyinstaller.spec --log-level=DEBUG
+
+      - name: Upload executable artifact
+        uses: actions/upload-artifact@{% endraw %}{{ gha_upload_artifact }}{% raw %}
+        with:
+          name: exe-${{ runner.os }}-${{ matrix.python-version }}
+          path: dist/{% endraw %}{% endif %}{% raw %}
 {% endraw %}{% if create_docs %}{% raw %}
   build-docs:
     needs: [ lint ]
