@@ -30,7 +30,7 @@ dev = [
     "pytest-cov>={% endraw %}{{ pytest_cov_version }}{% raw %}",
     "pytest-randomly>={% endraw %}{{ pytest_randomly_version }}{% raw %}",
 {% endraw %}{% if create_docs %}{% raw %}    "sphinx=={% endraw %}{{ sphinx_version }}{% raw %}",{% endraw %}{% endif %}{% raw %}
-{% endraw %}{% if is_frozen_executable %}{% raw %}    "pyinstaller=={% endraw %}{{ pyinstaller_version }}{% raw %}",{% endraw %}{% endif %}{% raw %}
+{% endraw %}{% if is_frozen_executable %}{% raw %}    "pyinstaller>={% endraw %}{{ pyinstaller_version }}{% raw %}",{% endraw %}{% endif %}{% raw %}
 ]
 
 [tool.setuptools]
