@@ -3,11 +3,11 @@
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Checked with pyright](https://microsoft.github.io/pyright/img/pyright_badge.svg)](https://microsoft.github.io/pyright/)
 [![Actions status]({% endraw %}{{ full_repo_url }}{% raw %}/actions/workflows/ci.yaml/badge.svg?branch=main)]({% endraw %}{{ full_repo_url }}{% raw %}/actions)
-[![Open in Dev Containers](https://img.shields.io/static/v1?label=Dev%20Containers&message=Open&color=blue)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url={% endraw %}{{ full_repo_url }}{% raw %})
+[![Open in Dev Containers](https://img.shields.io/static/v1?label=Dev%20Containers&message=Open&color=blue)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url={% endraw %}{{ full_repo_url }}{% raw %}){% endraw %}{% if not is_frozen_executable %}{% raw %}
 [![PyPI Version](https://img.shields.io/pypi/v/{% endraw %}{{ package_name }}{% raw %}.svg)](https://pypi.org/project/{% endraw %}{{ package_name }}{% raw %}/)
 [![Downloads](https://pepy.tech/badge/{% endraw %}{{ package_name }}{% raw %})](https://pepy.tech/project/{% endraw %}{{ package_name }}{% raw %})
 [![Python Versions](https://img.shields.io/pypi/pyversions/{% endraw %}{{ package_name }}{% raw %}.svg)](https://pypi.org/project/{% endraw %}{{ package_name }}{% raw %}/)
-[![Codecov](https://codecov.io/gh/{% endraw %}{{ full_repo_url | replace("https://github.com/", "") }}{% raw %}/branch/main/graph/badge.svg)](https://codecov.io/gh/{% endraw %}{{ full_repo_url | replace("https://github.com/", "") }}{% raw %})
+{% endraw %}{% endif %}{% raw %}[![Codecov](https://codecov.io/gh/{% endraw %}{{ full_repo_url | replace("https://github.com/", "") }}{% raw %}/branch/main/graph/badge.svg)](https://codecov.io/gh/{% endraw %}{{ full_repo_url | replace("https://github.com/", "") }}{% raw %})
 [![Documentation Status](https://readthedocs.org/projects/{% endraw %}{{ package_name }}{% raw %}/badge/?version=latest)](https://{% endraw %}{{ package_name }}{% raw %}.readthedocs.io/en/latest/?badge=latest)
 
 # Usage
