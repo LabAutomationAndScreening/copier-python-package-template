@@ -115,7 +115,7 @@ jobs:
       - name: Upload executable artifact
         uses: actions/upload-artifact@{% endraw %}{{ gha_upload_artifact }}{% raw %}
         with:
-          name: exe-${{ runner.os }}-${{ matrix.python-version }}
+          name: exe-${{ matrix.os }}-${{ matrix.python-version }}
           path: dist/
           if-no-files-found: error{% endraw %}{% endif %}{% raw %}
 
