@@ -21,4 +21,4 @@ primary_author: George Washington
 full_repo_url: https://www.github.com/foobar
 create_docs: no
 is_frozen_executable: yes
-use_windows_in_exe_ci: yes
+use_windows_in_exe_ci: no

@@ -61,6 +61,12 @@ is_frozen_executable:
     help: Is this project a frozen executable (instead of a PyPI-compatible library)?
     default: no
 
+use_windows_in_exe_ci:
+    type: bool
+    help: Should CI in the instantiated template also use Windows runners for building and testing the executable?
+    default: no
+    when: is_frozen_executable
+
 
 # Additional Settings
 _min_copier_version: "9.4"
