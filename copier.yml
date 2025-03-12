@@ -67,6 +67,11 @@ use_windows_in_exe_ci:
     default: no
     when: is_frozen_executable
 
+use_codecov:
+    type: bool
+    help: Upload code coverage results to CodeCov?
+    default: no
+
 
 # Additional Settings
 _min_copier_version: "9.4"
