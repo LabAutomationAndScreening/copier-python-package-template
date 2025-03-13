@@ -52,6 +52,7 @@ publish-url = "https://test.pypi.org/legacy/"{% endraw %}{% else %}{% raw %}
 [[tool.uv.index]]
 name = "code-artifact-primary"
 url = "https://{% endraw %}{{ repo_org_name }}{% raw %}-{% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}.d.codeartifact.{% endraw %}{{ aws_org_home_region }}{% raw %}.amazonaws.com/pypi/{% endraw %}{{ repo_org_name }}{% raw %}-primary/simple/"
+default = true
 
 [[tool.uv.index]]
 name = "code-artifact-staging"
