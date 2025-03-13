@@ -28,7 +28,7 @@ jobs:
           python-version: {% endraw %}{{ python_version }}{% raw %}{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
           code-artifact-auth-role-name: CoreInfraBaseAccess
           code-artifact-auth-role-account-id: {% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}
-          code-artifact-auth-role-region: {% endraw %}{{ aws_org_home_region }}{% endif %}{% raw %}
+          code-artifact-auth-region: {% endraw %}{{ aws_org_home_region }}{% endif %}{% raw %}
 
       - name: Set up mutex # Github concurrency management is horrible, things get arbitrarily cancelled if queued up. So using mutex until github fixes itself. When multiple jobs are modifying cache at once, weird things can happen.  possible issue is https://github.com/actions/toolkit/issues/658
         if: ${{ runner.os != 'Windows' }} # we're just gonna have to YOLO on Windows, because this action doesn't support it yet https://github.com/ben-z/gh-action-mutex/issues/14
@@ -78,7 +78,7 @@ jobs:
           python-version: ${{ matrix.python-version }}{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
           code-artifact-auth-role-name: CoreInfraBaseAccess
           code-artifact-auth-role-account-id: {% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}
-          code-artifact-auth-role-region: {% endraw %}{{ aws_org_home_region }}{% endif %}{% raw %}
+          code-artifact-auth-region: {% endraw %}{{ aws_org_home_region }}{% endif %}{% raw %}
 
       - name: Unit test
         run: uv run pytest tests/unit --cov-report=xml --durations=5
@@ -118,7 +118,7 @@ jobs:
           python-version: ${{ matrix.python-version }}{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
           code-artifact-auth-role-name: CoreInfraBaseAccess
           code-artifact-auth-role-account-id: {% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}
-          code-artifact-auth-role-region: {% endraw %}{{ aws_org_home_region }}{% endif %}{% raw %}
+          code-artifact-auth-region: {% endraw %}{{ aws_org_home_region }}{% endif %}{% raw %}
 
       - name: Build executable
         run: uv run pyinstaller pyinstaller.spec --log-level=DEBUG
@@ -152,7 +152,7 @@ jobs:
           python-version: ${{ matrix.python-version }}{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
           code-artifact-auth-role-name: CoreInfraBaseAccess
           code-artifact-auth-role-account-id: {% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}
-          code-artifact-auth-role-region: {% endraw %}{{ aws_org_home_region }}{% endif %}{% raw %}
+          code-artifact-auth-region: {% endraw %}{{ aws_org_home_region }}{% endif %}{% raw %}
 
       - name: Build docs
         working-directory: ./docs
