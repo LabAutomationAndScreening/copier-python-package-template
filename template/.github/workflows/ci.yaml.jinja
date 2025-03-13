@@ -151,7 +151,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
           code-artifact-auth-role-name: CoreInfraBaseAccess
-          code-artifact-auth-role-account-id: {% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}
+          code-artifact-auth-role-account-id: "{% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}"
           code-artifact-auth-region: {% endraw %}{{ aws_org_home_region }}{% endif %}{% raw %}
 
       - name: Build docs
