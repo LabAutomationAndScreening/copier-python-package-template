@@ -121,4 +121,4 @@ jobs:
       - name: Publish package
         run: |
 {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}          . .devcontainer/code-artifact-auth.sh{% endraw %}{% endif %}{% raw %}
-          uv publish --verbose --index {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}code-artifact-primary --username aws --password "$TWINE_PASSWORD"{% else %}testpypi{% endif %}
+          uv publish --verbose --index {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}code-artifact-primary --username aws --password "$TWINE_PASSWORD"{% else %}pypi{% endif %}
