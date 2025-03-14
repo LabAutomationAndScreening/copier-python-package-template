@@ -98,6 +98,14 @@ jobs:
 
       - name: Build package
         run: uv build --no-sources
+{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
+      - name: OIDC Auth for CodeArtifact
+        uses: aws-actions/configure-aws-credentials@{% endraw %}{{ gha_configure_aws_credentials }}{% raw %}
+        with:
+          role-to-assume: arn:aws:iam::{% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}:role/GHA-CA-Staging-{% endraw %}{{ repo_name }}{% raw %}
+          aws-region: {% endraw %}{{ aws_org_home_region }}{% raw %}
+
+{% endraw %}{% endif %}{% raw %}
 
       - name: Publish package
         run: uv publish --index {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}code-artifact-staging{% else %}testpypi{% endif %}
