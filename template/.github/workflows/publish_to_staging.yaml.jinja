@@ -120,4 +120,4 @@ jobs:
         run: |
 {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}          . .devcontainer/code-artifact-auth.sh{% endraw %}{% endif %}{% raw %}
           env
-          uv publish --verbose --index {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}code-artifact-staging{% else %}testpypi{% endif %}
+          uv publish --verbose --index {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}code-artifact-staging --username aws --password "$TWINE_PASSWORD"{% else %}testpypi{% endif %}
