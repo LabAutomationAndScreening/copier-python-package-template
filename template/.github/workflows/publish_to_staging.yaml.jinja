@@ -105,7 +105,7 @@ jobs:
 {% endraw %}{% endif %}{% raw %}
       - name: Build package
         run: |
-          . .devcontainer/code-artifact-auth.sh
+{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}          . .devcontainer/code-artifact-auth.sh{% endraw %}{% endif %}{% raw %}
           uv build --no-sources
 {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
       - name: OIDC Auth for Publishing to CodeArtifact

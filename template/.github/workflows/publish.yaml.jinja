@@ -1,4 +1,4 @@
-{% raw %}name: Publish to PyPI
+{% raw %}name: Publish to Production Package Registry
 
 on:
   workflow_dispatch:
@@ -22,7 +22,10 @@ jobs:
       - name: Install latest versions of python packages
         uses: ./.github/actions/install_deps_uv
         with:
-          python-version: {% endraw %}{{ python_version }}{% raw %}
+          python-version: {% endraw %}{{ python_version }}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
+          code-artifact-auth-role-name: CoreInfraBaseAccess
+          code-artifact-auth-role-account-id: {% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}
+          code-artifact-auth-region: {% endraw %}{{ aws_org_home_region }}{% endif %}{% raw %}
 
       - name: Set up mutex # Github concurrency management is horrible, things get arbitrarily cancelled if queued up. So using mutex until github fixes itself. When multiple jobs are modifying cache at once, weird things can happen.  possible issue is https://github.com/actions/toolkit/issues/658
         if: ${{ runner.os != 'Windows' }} # we're just gonna have to YOLO on Windows, because this action doesn't support it yet https://github.com/ben-z/gh-action-mutex/issues/14
@@ -69,7 +72,10 @@ jobs:
       - name: Install python tooling
         uses: ./.github/actions/install_deps_uv
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ matrix.python-version }}{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
+          code-artifact-auth-role-name: CoreInfraBaseAccess
+          code-artifact-auth-role-account-id: {% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}
+          code-artifact-auth-region: {% endraw %}{{ aws_org_home_region }}{% endif %}{% raw %}
 
       - name: Unit test
         run: uv run pytest --durations=5
@@ -85,7 +91,34 @@ jobs:
       - name: Install python tooling
         uses: ./.github/actions/install_deps_uv
         with:
-          python-version: {% endraw %}{{ python_version }}{% raw %}
+          python-version: {% endraw %}{{ python_version }}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
+          code-artifact-auth-role-name: CoreInfraBaseAccess
+          code-artifact-auth-role-account-id: {% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}
+          code-artifact-auth-region: {% endraw %}{{ aws_org_home_region }}{% endif %}{% raw %}
 
+{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
+      - name: OIDC Auth for Installing any dependencies that uv may need for build (sometimes it likes to install setuptools...even if it's already in the package dependencies)
+        uses: aws-actions/configure-aws-credentials@{% endraw %}{{ gha_configure_aws_credentials }}{% raw %}
+        with:
+          role-to-assume: arn:aws:iam::{% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}:role/CoreInfraBaseAccess
+          aws-region: {% endraw %}{{ aws_org_home_region }}{% raw %}
+
+{% endraw %}{% endif %}{% raw %}
       - name: Build package
-        run: uv build --no-sources{% endraw %}
+        run: |
+{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}          . .devcontainer/code-artifact-auth.sh{% endraw %}{% endif %}{% raw %}
+          uv build --no-sources
+
+{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
+      - name: OIDC Auth for Publishing to CodeArtifact
+        uses: aws-actions/configure-aws-credentials@{% endraw %}{{ gha_configure_aws_credentials }}{% raw %}
+        with:
+          role-to-assume: arn:aws:iam::{% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}:role/GHA-CA-Primary-{% endraw %}{{ repo_name }}{% raw %}
+          aws-region: {% endraw %}{{ aws_org_home_region }}{% raw %}
+
+{% endraw %}{% endif %}{% raw %}
+
+      - name: Publish package
+        run: |
+{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}          . .devcontainer/code-artifact-auth.sh{% endraw %}{% endif %}{% raw %}
+          uv publish --verbose --index {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}code-artifact-primary --username aws --password "$TWINE_PASSWORD"{% else %}testpypi{% endif %}
