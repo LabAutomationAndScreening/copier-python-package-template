@@ -21,7 +21,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    # Specific to this template
+    # Specific to this repository
 
 
     # Managed by upstream template
@@ -29,6 +29,7 @@ dev = [
     "pytest>={% endraw %}{{ pytest_version }}{% raw %}",
     "pytest-cov>={% endraw %}{{ pytest_cov_version }}{% raw %}",
     "pytest-randomly>={% endraw %}{{ pytest_randomly_version }}{% raw %}",
+    "setuptools">={% endraw %}{{ setuptools_version }}{% raw %}", # likely related to the kludge for license-files below
 {% endraw %}{% if create_docs %}{% raw %}    "sphinx=={% endraw %}{{ sphinx_version }}{% raw %}",{% endraw %}{% endif %}{% raw %}
 {% endraw %}{% if is_frozen_executable %}{% raw %}    "pyinstaller>={% endraw %}{{ pyinstaller_version }}{% raw %}",{% endraw %}{% endif %}{% raw %}
 ]
