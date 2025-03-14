@@ -81,7 +81,7 @@ jobs:
         run: uv run pytest --durations=5
 
   build:
-    # needs: [ test ]
+    needs: [ test ]
     runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
 
     steps:
@@ -119,5 +119,4 @@ jobs:
       - name: Publish package
         run: |
 {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}          . .devcontainer/code-artifact-auth.sh{% endraw %}{% endif %}{% raw %}
-          env
           uv publish --verbose --index {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}code-artifact-staging --username aws --password "$TWINE_PASSWORD"{% else %}testpypi{% endif %}
