@@ -94,4 +94,7 @@ jobs:
           code-artifact-auth-region: {% endraw %}{{ aws_org_home_region }}{% endif %}{% raw %}
 
       - name: Build package
-        run: uv build --no-sources{% endraw %}
+        run: uv build --no-sources
+
+      - name: Publish package
+        run: uv publish --index {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}code-artifact-staging{% else %}testpypi{% endif %}
