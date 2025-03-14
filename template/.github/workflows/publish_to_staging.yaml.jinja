@@ -95,7 +95,14 @@ jobs:
           code-artifact-auth-role-name: CoreInfraBaseAccess
           code-artifact-auth-role-account-id: "{% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}"
           code-artifact-auth-region: {% endraw %}{{ aws_org_home_region }}{% endif %}{% raw %}
+{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
+      - name: OIDC Auth for Installing any dependencies that uv may need for build (sometimes it likes to install setuptools...even if it's already in the package dependencies)
+        uses: aws-actions/configure-aws-credentials@{% endraw %}{{ gha_configure_aws_credentials }}{% raw %}
+        with:
+          role-to-assume: arn:aws:iam::{% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}:role/CoreInfraBaseAccess
+          aws-region: {% endraw %}{{ aws_org_home_region }}{% raw %}
 
+{% endraw %}{% endif %}{% raw %}
       - name: Build package
         run: uv build --no-sources
 {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
