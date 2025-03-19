@@ -29,6 +29,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4.2.2
 
+
+
       - name: Install latest versions of python packages
         uses: ./.github/actions/install_deps_uv
         with:
@@ -42,7 +44,7 @@ jobs:
         timeout-minutes: 30 # this is the amount of time this action will wait to attempt to acquire the mutex lock before failing, e.g. if other jobs are queued up in front of it
 
       - name: Cache Pre-commit hooks
-        uses: actions/cache@v4.2.0
+        uses: actions/cache@v4.2.2
         env:
           cache-name: cache-pre-commit-hooks
         with:
@@ -130,7 +132,7 @@ jobs:
         timeout-minutes: 30 # this is the amount of time this action will wait to attempt to acquire the mutex lock before failing, e.g. if other jobs are queued up in front of it
 
       - name: Cache Pre-commit hooks
-        uses: actions/cache@v4.2.0
+        uses: actions/cache@v4.2.2
         env:
           cache-name: cache-pre-commit-hooks
         with:

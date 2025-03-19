@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier
-_commit: v0.0.9
+_commit: v0.0.13
 _src_path: gh:LabAutomationAndScreening/copier-base-template.git
 description: Copier template for creating Python libraries and executables
 python_ci_versions:
@@ -9,6 +9,7 @@ python_version: 3.12.7
 repo_name: copier-python-package-template
 repo_org_name: LabAutomationAndScreening
 ssh_port_number: 55874
+template_uses_javascript: false
 template_uses_pulumi: false
 template_uses_python: true
 

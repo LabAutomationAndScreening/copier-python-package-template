@@ -21,6 +21,7 @@ use_windows_in_ci:
     help: Should CI in the instantiated template also use Windows runners?
     default: no
 
+
 python_version:
     type: str
     help: What version of Python is used for development?
