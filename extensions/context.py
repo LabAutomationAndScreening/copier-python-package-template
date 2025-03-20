@@ -13,7 +13,7 @@ class ContextUpdater(ContextHook):
         context["uv_version"] = "0.6.6"
         context["pnpm_version"] = "10.6.3"
         context["pre_commit_version"] = "4.1.0"
-        context["pyright_version"] = "1.1.396"
+        context["pyright_version"] = "1.1.397"
         context["pytest_version"] = "8.3.4"
         context["pytest_randomly_version"] = "3.16.0"
         context["pytest_cov_version"] = "6.0.0"
