@@ -37,7 +37,10 @@ class ContextUpdater(ContextHook):
         context["gha_checkout"] = "v4.2.2"
         context["gha_setup_python"] = "v5.4.0"
         context["gha_cache"] = "v4.2.2"
-        context["gha_upload_artifact"] = "v4.6.1"
+        context["gha_upload_artifact"] = "v4.6.2"
+        context["gha_download_artifact"] = "v4.2.1"
+        context["gha_setup_buildx"] = "v3.10.0"
+        context["gha_docker_build_push"] = "v6.15.0"
         context["gha_configure_aws_credentials"] = "v4.1.0"
         context["gha_setup_node"] = "v4.3.0"
         context["gha_mutex"] = "1ebad517141198e08d47cf72f3c0975316620a65 # v1.0.0-alpha.10"
@@ -47,6 +50,9 @@ class ContextUpdater(ContextHook):
         context["py311_version"] = ""
         context["py312_version"] = "3.12.7"
         context["py313_version"] = "3.13.2"
+
+        context["debian_release_name"] = "bookworm"
+        context["alpine_image_version"] = "3.20"
 
         # Kludge to be able to help symlinked jinja files in the child and grandchild templates
         context["template_uses_vuejs"] = False
