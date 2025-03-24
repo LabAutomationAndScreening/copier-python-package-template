@@ -34,12 +34,17 @@ class ContextUpdater(ContextHook):
         context["fastapi_version"] = "0.115.11"
         context["uvicorn_version"] = "0.34.0"
 
+        context["nuxt_ui_version"] = "^3.0.0"
+        context["nuxt_version"] = "^3.16.0"
+        context["typescript_version"] = "^5.8.2"
+
         context["gha_checkout"] = "v4.2.2"
         context["gha_setup_python"] = "v5.4.0"
         context["gha_cache"] = "v4.2.2"
         context["gha_upload_artifact"] = "v4.6.2"
         context["gha_download_artifact"] = "v4.2.1"
         context["gha_setup_buildx"] = "v3.10.0"
+        context["buildx_version"] = "v0.22.0"
         context["gha_docker_build_push"] = "v6.15.0"
         context["gha_configure_aws_credentials"] = "v4.1.0"
         context["gha_setup_node"] = "v4.3.0"
