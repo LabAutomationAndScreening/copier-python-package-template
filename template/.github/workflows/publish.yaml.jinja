@@ -116,14 +116,7 @@ jobs:
           path: dist/
           if-no-files-found: error
 
-{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
-      - name: OIDC Auth for Publishing to CodeArtifact
-        uses: aws-actions/configure-aws-credentials@{% endraw %}{{ gha_configure_aws_credentials }}{% raw %}
-        with:
-          role-to-assume: arn:aws:iam::{% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}:role/GHA-CA-Primary-{% endraw %}{{ repo_name }}{% raw %}
-          aws-region: {% endraw %}{{ aws_org_home_region }}{% raw %}
 
-{% endraw %}{% endif %}{% raw %}
 
 
 
@@ -133,7 +126,7 @@ jobs:
     runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
     environment:
       name: testpypi
-      url: https://pypi.org/p/{% endraw %}{{ package_name | replace('_', '-') }}{% raw %}
+      url: https://test.pypi.org/p/{% endraw %}{{ package_name | replace('_', '-') }}{% raw %}
     permissions:
       attestations: write
       id-token: write
@@ -143,7 +136,20 @@ jobs:
         with:
           name: python-package-distributions
           path: dist/
-      - name: Publish distribution 📦 to PyPI
+{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
+      - name: OIDC Auth for Publishing to CodeArtifact
+        uses: aws-actions/configure-aws-credentials@{% endraw %}{{ gha_configure_aws_credentials }}{% raw %}
+        with:
+          role-to-assume: arn:aws:iam::{% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}:role/GHA-CA-Primary-{% endraw %}{{ repo_name }}{% raw %}
+          aws-region: {% endraw %}{{ aws_org_home_region }}{% raw %}
+
+      - name: Publish distribution to Code Artifact
+        run: |
+          . .devcontainer/code-artifact-auth.sh
+          uv publish --verbose --index code-artifact-primary --username aws --password "$TWINE_PASSWORD"
+
+{% endraw %}{% endif %}{% raw %}
+      - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@v1.12.4
         with:
           attestations: false
