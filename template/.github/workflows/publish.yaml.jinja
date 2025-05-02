@@ -1,8 +1,13 @@
-{% raw %}name: Publish to Production Package Registry
+{% raw %}name: Publish to Package Registry
 
 on:
   workflow_dispatch:
-
+    inputs:
+      publish_to_primary:
+        description: 'Publish to Primary Registry'
+        type: boolean
+        required: false
+        default: false
 env:
   PYTHONUNBUFFERED: True
   PRE_COMMIT_HOME: ${{ github.workspace }}/.precommit_cache
@@ -15,6 +20,8 @@ jobs:
   get-values:
     name: Get Values
     runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
+    outputs:
+      package-version: ${{ steps.extract-package-version.outputs.package_version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@{% endraw %}{{ gha_checkout }}{% raw %}
@@ -23,6 +30,7 @@ jobs:
         with:
           python-version: {% endraw %}{{ python_version }}{% raw %}
       - name: Extract package version
+        id: extract-package-version
         run: |
           VERSION=$(python3 ./.github/workflows/git_tag.py)
           echo "Extracted version: $VERSION"
@@ -186,12 +194,13 @@ jobs:
         with:
           time: 60s{% endraw %}{% endif %}{% raw %}
       - name: Install from staging registry
-        run: pip install -i https://test.pypi.org/simple/ {% endraw %}{{ package_name | replace('_', '-') }}{% raw %}==${{ needs.get-values.outputs.package_version }}
+        run: pip install -i https://test.pypi.org/simple/ {% endraw %}{{ package_name | replace('_', '-') }}{% raw %}==${{ needs.get-values.outputs.package-version }}
       - name: Confirm library can be imported successfully
         run: python -c "import {% endraw %}{{ package_name }}{% raw %}"
 
   create-tag:
     name: Create the git tag
+    if: ${{ github.event.inputs.publish_to_primary }}
     needs: [ install-from-staging ]
     runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
     steps:
@@ -208,6 +217,7 @@ jobs:
 
   publish-to-primary:
     name: Publish Python distribution to Primary Package Registry
+    if: ${{ github.event.inputs.publish_to_primary }}
     needs: [ create-tag ]
     runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
     environment:
@@ -242,6 +252,7 @@ jobs:
 
   install-from-primary:
     name: Install package from primary registry
+    if: ${{ github.event.inputs.publish_to_primary }}
     needs: [ publish-to-primary, get-values ]
     runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
     steps:
@@ -255,6 +266,6 @@ jobs:
         with:
           time: 60s{% endraw %}{% endif %}{% raw %}
       - name: Install from primary registry
-        run: pip install {% endraw %}{{ package_name | replace('_', '-') }}{% raw %}==${{ needs.get-values.outputs.package_version }}
+        run: pip install {% endraw %}{{ package_name | replace('_', '-') }}{% raw %}==${{ needs.get-values.outputs.package-version }}
       - name: Confirm library can be imported successfully
         run: python -c "import {% endraw %}{{ package_name }}{% raw %}"{% endraw %}
