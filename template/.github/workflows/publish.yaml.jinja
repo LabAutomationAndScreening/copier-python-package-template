@@ -109,6 +109,13 @@ jobs:
 {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}          . .devcontainer/code-artifact-auth.sh{% endraw %}{% endif %}{% raw %}
           uv build --no-sources
 
+      - name: Upload build package
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: python-package-distributions
+          path: dist/
+          if-no-files-found: error
+
 {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
       - name: OIDC Auth for Publishing to CodeArtifact
         uses: aws-actions/configure-aws-credentials@{% endraw %}{{ gha_configure_aws_credentials }}{% raw %}
@@ -121,4 +128,25 @@ jobs:
       - name: Publish package
         run: |
 {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}          . .devcontainer/code-artifact-auth.sh{% endraw %}{% endif %}{% raw %}
-          uv publish --verbose --index {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}code-artifact-primary --username aws --password "$TWINE_PASSWORD"{% else %}pypi{% endif %}
+          uv publish --verbose --index {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}code-artifact-primary --username aws --password "$TWINE_PASSWORD"{% else %}pypi{% endif %}{% raw %}
+
+  publish:
+    name: Publish Python 🐍 distribution 📦 to PyPI
+    needs: [ build ]
+    runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
+    environment:
+      name: pypi
+      url: https://pypi.org/p/{% endraw %}{{ package_name | replace('_', '-') }}{% raw %}
+    permissions:
+      attestations: write
+      id-token: write
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Publish distribution 📦 to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.12.4
+        with:
+          attestations: false{% endraw %}
