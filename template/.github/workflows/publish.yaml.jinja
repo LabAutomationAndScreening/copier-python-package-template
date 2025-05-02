@@ -12,6 +12,21 @@ permissions:
     contents: write # needed for mutex
 
 jobs:
+  get-values:
+    name: Get Values
+    runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@{% endraw %}{{ gha_checkout }}{% raw %}
+      - name: Setup python
+        uses: actions/setup-python@{% endraw %}{{ gha_setup_python }}{% raw %}
+        with:
+          python-version: {% endraw %}{{ python_version }}{% raw %}
+  - name: Extract package version
+    run: |
+      VERSION=$(python3 ./github/workflows/git_tag.py)
+      echo "package_version=$VERSION" >> $GITHUB_OUTPUT
+
   lint:
     name: Pre-commit
     runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
@@ -117,9 +132,6 @@ jobs:
           if-no-files-found: error
 
 
-
-
-
   publish-to-staging:
     name: Publish Python distribution to Staging Package Registry
     needs: [ build ]
@@ -153,4 +165,34 @@ jobs:
         uses: pypa/gh-action-pypi-publish@v1.12.4
         with:
           attestations: false
-          repository-url: https://test.pypi.org/legacy/{% endraw %}
+          repository-url: https://test.pypi.org/legacy/
+
+ install-from-staging:
+    name: Install package from staging registry
+    needs: [ publish-to-staging, get-values ]
+    runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
+    steps:
+      - name: Setup python
+        uses: actions/setup-python@{% endraw %}{{ gha_setup_python }}{% raw %}
+        with:
+          python-version: {% endraw %}{{ python_version }}{% raw %}
+      - name: Install from staging registry
+        run: pip install -i https://test.pypi.org/simple/ {% endraw %}{{ package_name | replace('_', '-') }}{% raw %}==${{ needs.get-values.outputs.package_version }}
+      - name: Confirm library can be importde successfully
+        run: python -c "import {% endraw %}{{ package_name }}{% raw %}"
+
+ create-tag:
+    name: Create the git tag
+    needs: [ install-from-staging ]
+    runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@{% endraw %}{{ gha_checkout }}{% raw %}
+      - name: Setup python
+        uses: actions/setup-python@{% endraw %}{{ gha_setup_python }}{% raw %}
+        with:
+          python-version: {% endraw %}{{ python_version }}{% raw %}
+      - name: Confirm tag not already present
+        run: python3 ./github/workflows/git_tag.py --confirm-tag-not-present
+      - name: Create tag
+        run: python3 ./github/workflows/git_tag.py --push-tag-to-remote{% endraw %}
