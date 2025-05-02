@@ -130,12 +130,12 @@ jobs:
 {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}          . .devcontainer/code-artifact-auth.sh{% endraw %}{% endif %}{% raw %}
           uv publish --verbose --index {% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}code-artifact-primary --username aws --password "$TWINE_PASSWORD"{% else %}pypi{% endif %}{% raw %}
 
-  publish:
-    name: Publish Python 🐍 distribution 📦 to PyPI
+  publish-to-staging:
+    name: Publish Python distribution to Staging Package Registry
     needs: [ build ]
     runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
     environment:
-      name: pypi
+      name: testpypi
       url: https://pypi.org/p/{% endraw %}{{ package_name | replace('_', '-') }}{% raw %}
     permissions:
       attestations: write
@@ -149,4 +149,5 @@ jobs:
       - name: Publish distribution 📦 to PyPI
         uses: pypa/gh-action-pypi-publish@v1.12.4
         with:
-          attestations: false{% endraw %}
+          attestations: false
+          repository-url: https://test.pypi.org/legacy/{% endraw %}
