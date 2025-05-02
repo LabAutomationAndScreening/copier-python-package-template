@@ -179,6 +179,11 @@ jobs:
         uses: actions/setup-python@{% endraw %}{{ gha_setup_python }}{% raw %}
         with:
           python-version: {% endraw %}{{ python_version }}{% raw %}
+{% endraw %}{% if python_package_registry == "PyPI" %}{% raw %}
+      - name: Sleep to allow PyPI Index to update before proceeding to the next step
+        uses: juliangruber/sleep-action@v2.0.3
+        with:
+          time: 60s{% endraw %}{% endif %}{% raw %}
       - name: Install from staging registry
         run: pip install -i https://test.pypi.org/simple/ {% endraw %}{{ package_name | replace('_', '-') }}{% raw %}==${{ needs.get-values.outputs.package_version }}
       - name: Confirm library can be imported successfully
@@ -243,6 +248,11 @@ jobs:
         uses: actions/setup-python@{% endraw %}{{ gha_setup_python }}{% raw %}
         with:
           python-version: {% endraw %}{{ python_version }}{% raw %}
+{% endraw %}{% if python_package_registry == "PyPI" %}{% raw %}
+      - name: Sleep to allow PyPI Index to update before proceeding to the next step
+        uses: juliangruber/sleep-action@v2.0.3
+        with:
+          time: 60s{% endraw %}{% endif %}{% raw %}
       - name: Install from primary registry
         run: pip install {% endraw %}{{ package_name | replace('_', '-') }}{% raw %}==${{ needs.get-values.outputs.package_version }}
       - name: Confirm library can be imported successfully
