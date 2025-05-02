@@ -25,6 +25,7 @@ jobs:
       - name: Extract package version
         run: |
           VERSION=$(python3 ./.github/workflows/git_tag.py)
+          echo "Extracted version: $VERSION"
           echo "package_version=$VERSION" >> $GITHUB_OUTPUT
 
   lint:
