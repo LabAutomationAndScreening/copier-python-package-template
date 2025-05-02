@@ -72,7 +72,7 @@ jobs:
         run:  pre-commit run -a
 
   test:
-    needs: [ lint, get-values ]
+    needs: [ lint ]
     strategy:
       matrix:
         os:
@@ -90,7 +90,6 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - run: echo '${{ toJSON(needs.get-values.outputs) }}'
       - name: Checkout code
         uses: actions/checkout@{% endraw %}{{ gha_checkout }}{% raw %}
 
