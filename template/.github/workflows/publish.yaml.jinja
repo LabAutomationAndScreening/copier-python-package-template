@@ -171,7 +171,7 @@ jobs:
 
 {% endraw %}{% else %}{% raw %}
       - name: Publish distribution to Test PyPI
-        uses: pypa/gh-action-pypi-publish@v1.12.4
+        uses: pypa/gh-action-pypi-publish@{% endraw %}{{ gha_pypi_publish }}{% raw %}
         with:
           attestations: false
           repository-url: https://test.pypi.org/legacy/
@@ -189,7 +189,7 @@ jobs:
           python-version: {% endraw %}{{ python_version }}{% raw %}
 {% endraw %}{% if python_package_registry == "PyPI" %}{% raw %}
       - name: Sleep to allow PyPI Index to update before proceeding to the next step
-        uses: juliangruber/sleep-action@v2.0.3
+        uses: juliangruber/sleep-action@{% endraw %}{{ gha_sleep }}{% raw %}
         with:
           time: 60s{% endraw %}{% endif %}{% raw %}
       - name: Install from staging registry
@@ -245,7 +245,7 @@ jobs:
 
 {% endraw %}{% else %}{% raw %}
       - name: Publish distribution to PyPI
-        uses: pypa/gh-action-pypi-publish@v1.12.4
+        uses: pypa/gh-action-pypi-publish@{% endraw %}{{ gha_pypi_publish }}{% raw %}
         with:
           attestations: false{% endraw %}{% endif %}{% raw %}
 
@@ -261,7 +261,7 @@ jobs:
           python-version: {% endraw %}{{ python_version }}{% raw %}
 {% endraw %}{% if python_package_registry == "PyPI" %}{% raw %}
       - name: Sleep to allow PyPI Index to update before proceeding to the next step
-        uses: juliangruber/sleep-action@v2.0.3
+        uses: juliangruber/sleep-action@{% endraw %}{{ gha_sleep }}{% raw %}
         with:
           time: 60s{% endraw %}{% endif %}{% raw %}
       - name: Install from primary registry
