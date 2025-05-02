@@ -24,7 +24,7 @@ jobs:
           python-version: {% endraw %}{{ python_version }}{% raw %}
       - name: Extract package version
         run: |
-          VERSION=$(python3 ./github/workflows/git_tag.py)
+          VERSION=$(python3 ./.github/workflows/git_tag.py)
           echo "package_version=$VERSION" >> $GITHUB_OUTPUT
 
   lint:
@@ -193,6 +193,6 @@ jobs:
         with:
           python-version: {% endraw %}{{ python_version }}{% raw %}
       - name: Confirm tag not already present
-        run: python3 ./github/workflows/git_tag.py --confirm-tag-not-present
+        run: python3 ./.github/workflows/git_tag.py --confirm-tag-not-present
       - name: Create tag
-        run: python3 ./github/workflows/git_tag.py --push-tag-to-remote{% endraw %}
+        run: python3 ./.github/workflows/git_tag.py --push-tag-to-remote{% endraw %}
