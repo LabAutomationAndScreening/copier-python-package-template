@@ -15,7 +15,11 @@ permissions:
     contents: write # needed for mutex
 
 jobs:
-  lint:
+  get-values:
+    uses: ./.github/workflows/get-values.yaml
+
+  pre-commit:
+    needs: [ get-values ]
     name: Pre-commit
     runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
     steps:
@@ -161,10 +165,24 @@ jobs:
 
   required-check:
     runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
-    needs: [ test{% endraw %}{% if create_docs %}, build-docs{% endif %}{% if is_frozen_executable %}, executable{% endif %}{% raw %} ]
+    needs:
+      - test
+      - get-values{% endraw %}{% if create_docs %}
+      - build-docs{% endif %}{% if is_frozen_executable %}
+      - executable{% endif %}{% raw %}
     if: always()
     steps:
       - name: fail if prior job failure
         if: needs.test.result != 'success'{% endraw %}{% if create_docs %} || needs.build-docs.result != 'success'{% endif %}{% if is_frozen_executable %} || needs.executable.result != 'success'{% endif %}{% raw %}
         run: |
-          exit 1{% endraw %}
+          exit 1
+      - name: Mark updated Dependabot commit of devcontainer hash as succeeded
+        if: needs.get-values.outputs.dependabot-commit-created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api \
+            -X POST -H "Accept: application/vnd.github.v3+json" \
+            "/repos/${{ github.repository }}/statuses/${{ needs.get-values.outputs.new-dependabot-sha }}" \
+            -f state=success -f context="required-check" -f description="Initial CI run passed" \
+            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"{% endraw %}
