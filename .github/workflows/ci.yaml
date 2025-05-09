@@ -18,6 +18,9 @@ jobs:
   get-values:
     runs-on: ubuntu-24.04
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
       - name: Update Devcontainer Hash
         if: ${{ github.actor == 'dependabot[bot]' }}
         uses: ./.github/actions/update-devcontainer-hash
