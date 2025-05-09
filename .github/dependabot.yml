@@ -16,6 +16,7 @@ updates:
         update-types:
           - "version-update:semver-minor"
           - "version-update:semver-patch"
+
     groups:
       prod-dependencies:
         dependency-type: "production"
