@@ -15,15 +15,17 @@ permissions:
     contents: write # needed for mutex
 
 jobs:
-  update-devcontainer-hash:
-    if: ${{ github.actor == 'dependabot[bot]' }}
-    uses: ./.github/workflows/update-devcontainer-hash.yaml
-    with:
-      branch: ${{ github.event.pull_request.head.ref }}
+  get-values:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Update Devcontainer Hash
+        if: ${{ github.actor == 'dependabot[bot]' }}
+        uses: ./.github/actions/update-devcontainer-hash
+        with:
+          branch: ${{ github.ref_name }}
 
   pre-commit:
-    needs: [ update-devcontainer-hash ]
-    if: needs.update-devcontainer-hash.result != 'failure'   # proceed when update job succeeded or was skipped
+    needs: [ get-values ]
     strategy:
       fail-fast: false
       matrix:
@@ -36,6 +38,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.ref_name }} # explicitly get the head of
 
 
 
