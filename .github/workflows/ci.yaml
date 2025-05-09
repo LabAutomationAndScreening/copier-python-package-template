@@ -13,16 +13,21 @@ env:
 permissions:
     id-token: write
     contents: write # needed for mutex
+    statuses: write # needed for updating status on Dependabot PRs
 
 jobs:
   get-values:
     runs-on: ubuntu-24.04
+    outputs:
+      new-dependabot-sha: ${{ steps.update-hash.outputs.new-sha }}
+      dependabot-commit-created: ${{ steps.update-hash.outputs.commit-created }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4.2.2
 
       - name: Update Devcontainer Hash
         if: ${{ github.actor == 'dependabot[bot]' }}
+        id: update-hash
         uses: ./.github/actions/update-devcontainer-hash
         with:
           branch: ${{ github.ref_name }}
@@ -170,10 +175,21 @@ jobs:
 
   required-check:
     runs-on: ubuntu-24.04
-    needs: [ lint-matrix ]
+    needs: [ lint-matrix, get-values ]
     if: always()
     steps:
       - name: fail if prior job failure
         if: needs.lint-matrix.result != 'success'
         run: |
           exit 1
+      - name: Make updated dependabot hash commit as succeeded
+        if: needs.get-values.outputs.dependabot-commit-created == 'true'
+        run: |
+          gh api \
+            -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            "/repos/${{ github.repository }}/statuses/${{ needs.get-values.outputs.new-dependabot-sha }}" \
+            -f state=success \
+            -f context="required-check" \
+            -f description="Initial CI run passed" \
+            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
