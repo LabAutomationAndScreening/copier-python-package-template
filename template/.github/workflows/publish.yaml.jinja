@@ -44,7 +44,7 @@ jobs:
         uses: actions/checkout@{% endraw %}{{ gha_checkout }}{% raw %}
 
       - name: Install latest versions of python packages
-        uses: ./.github/actions/install_deps_uv
+        uses: ./.github/actions/install_deps
         with:
           python-version: {% endraw %}{{ python_version }}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
           code-artifact-auth-role-name: CoreInfraBaseAccess
@@ -94,7 +94,7 @@ jobs:
         uses: actions/checkout@{% endraw %}{{ gha_checkout }}{% raw %}
 
       - name: Install python tooling
-        uses: ./.github/actions/install_deps_uv
+        uses: ./.github/actions/install_deps
         with:
           python-version: ${{ matrix.python-version }}{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
           code-artifact-auth-role-name: CoreInfraBaseAccess
@@ -113,7 +113,7 @@ jobs:
         uses: actions/checkout@{% endraw %}{{ gha_checkout }}{% raw %}
 
       - name: Install python tooling
-        uses: ./.github/actions/install_deps_uv
+        uses: ./.github/actions/install_deps
         with:
           python-version: {% endraw %}{{ python_version }}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
           code-artifact-auth-role-name: CoreInfraBaseAccess
