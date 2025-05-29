@@ -63,7 +63,7 @@ jobs:
 
       - name: OIDC Auth for ECR
         if: ${{ inputs.push-role-name != 'no-push' }}
-        uses: aws-actions/configure-aws-credentials@v4.1.0
+        uses: aws-actions/configure-aws-credentials@v4.2.0
         with:
           role-to-assume: arn:aws:iam::${{ steps.parse_ecr_url.outputs.aws_account_id }}:role/${{ inputs.push-role-name }}
           aws-region: ${{ steps.parse_ecr_url.outputs.aws_region }}
@@ -120,7 +120,7 @@ jobs:
 
       - name: Build Docker Image
         if: ${{ (inputs.save-as-artifact && inputs.push-role-name == 'no-push') || steps.check-if-exists.outputs.status == 'notfound' }}
-        uses: docker/build-push-action@v6.15.0
+        uses: docker/build-push-action@v6.16.0
         with:
           context: ${{ inputs.context }}
           push: ${{ inputs.push-role-name != 'no-push' && steps.check-if-exists.outputs.status == 'notfound' }}
