@@ -10,23 +10,23 @@ class ContextUpdater(ContextHook):
 
     @override
     def hook(self, context: dict[Any, Any]) -> dict[Any, Any]:
-        context["uv_version"] = "0.7.8"
-        context["pnpm_version"] = "10.11.0"
+        context["uv_version"] = "0.7.12"
+        context["pnpm_version"] = "10.12.1"
         context["pre_commit_version"] = "4.2.0"
-        context["pyright_version"] = "1.1.400"
-        context["pytest_version"] = "8.3.5"
+        context["pyright_version"] = "1.1.402"
+        context["pytest_version"] = "8.4.0"
         context["pytest_randomly_version"] = "3.16.0"
-        context["pytest_cov_version"] = "6.1.1"
+        context["pytest_cov_version"] = "6.2.1"
         context["copier_version"] = "9.7.1"
         context["copier_templates_extension_version"] = "0.3.1"
         context["sphinx_version"] = "8.1.3"
-        context["pulumi_version"] = "3.171.0"
-        context["pulumi_aws_version"] = "6.81.0"
-        context["pulumi_aws_native_version"] = "1.27.0"
+        context["pulumi_version"] = "3.177.0"
+        context["pulumi_aws_version"] = "6.83.0"
+        context["pulumi_aws_native_version"] = "1.30.0"
         context["pulumi_command_version"] = "1.1.0"
         context["pulumi_github_version"] = "6.7.2"
-        context["pulumi_okta_version"] = "4.18.0"
-        context["boto3_version"] = "1.38.18"
+        context["pulumi_okta_version"] = "4.20.0"
+        context["boto3_version"] = "1.38.38"
         context["ephemeral_pulumi_deploy_version"] = "0.0.4"
         context["pydantic_version"] = "2.11.5"
         context["pyinstaller_version"] = "6.13.0"
@@ -34,14 +34,14 @@ class ContextUpdater(ContextHook):
         context["strawberry_graphql_version"] = "0.270.4"
         context["fastapi_version"] = "0.115.12"
         context["uvicorn_version"] = "0.34.2"
-        context["lab_auto_pulumi_version"] = "0.1.12"
+        context["lab_auto_pulumi_version"] = "0.1.14"
 
         context["nuxt_ui_version"] = "^3.1.2"
         context["nuxt_version"] = "^3.17.3"
         context["typescript_version"] = "^5.8.2"
         context["vue_version"] = "^3.5.13"
         context["vue_router_version"] = "^4.5.0"
-        context["faker_version"] = "^9.7.0"
+        context["faker_version"] = "^9.8.0"
         context["graphql_codegen_cli_version"] = "^5.0.5"
         context["graphql_codegen_typescript_version"] = "^4.1.6"
 
@@ -69,7 +69,8 @@ class ContextUpdater(ContextHook):
         context["py313_version"] = "3.13.2"
 
         context["debian_release_name"] = "bookworm"
-        context["alpine_image_version"] = "3.20"
+        context["alpine_image_version"] = "3.21"
+        context["nginx_image_version"] = "1.28.0"
 
         # Kludge to be able to help symlinked jinja files in the child and grandchild templates
         context["template_uses_vuejs"] = False
