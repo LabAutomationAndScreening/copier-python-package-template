@@ -164,7 +164,7 @@ jobs:
         with:
           time: 60s{% endraw %}{% endif %}{% raw %}
       - name: Install from staging registry
-        run: pip install -i https://test.pypi.org/simple/ {% endraw %}{{ package_name | replace('_', '-') }}{% raw %}==${{ needs.get-values.outputs.package-version }}
+        run: pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://www.pypi.org/simple {% endraw %}{{ package_name | replace('_', '-') }}{% raw %}==${{ needs.get-values.outputs.package-version }}
       - name: Confirm library can be imported successfully
         run: python -c "import {% endraw %}{{ package_name | replace('-', '_') }}{% raw %}"
 
