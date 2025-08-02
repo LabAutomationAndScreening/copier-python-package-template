@@ -1,8 +1,8 @@
-# adapted from https://github.com/copier-org/copier-templates-extensions#context-hook-extension
+# adapted from https://github.com/copier-org/copier-template-extensions#context-hook-extension
 from typing import Any
 from typing import override
 
-from copier_templates_extensions import ContextHook
+from copier_template_extensions import ContextHook
 
 
 class ContextUpdater(ContextHook):
@@ -10,23 +10,23 @@ class ContextUpdater(ContextHook):
 
     @override
     def hook(self, context: dict[Any, Any]) -> dict[Any, Any]:
-        context["uv_version"] = "0.7.12"
-        context["pnpm_version"] = "10.13.1"
+        context["uv_version"] = "0.8.3"
+        context["pnpm_version"] = "10.14.0"
         context["pre_commit_version"] = "4.2.0"
         context["pyright_version"] = "1.1.403"
-        context["pytest_version"] = "8.4.0"
+        context["pytest_version"] = "8.4.1"
         context["pytest_randomly_version"] = "3.16.0"
         context["pytest_cov_version"] = "6.2.1"
-        context["copier_version"] = "9.7.1"
-        context["copier_templates_extension_version"] = "0.3.1"
+        context["copier_version"] = "9.8.0"
+        context["copier_template_extensions_version"] = "0.3.2"
         context["sphinx_version"] = "8.1.3"
-        context["pulumi_version"] = "3.181.0"
-        context["pulumi_aws_version"] = "6.83.0"
-        context["pulumi_aws_native_version"] = "1.30.0"
+        context["pulumi_version"] = "3.186.0"
+        context["pulumi_aws_version"] = "7.1.0"
+        context["pulumi_aws_native_version"] = "1.31.0"
         context["pulumi_command_version"] = "1.1.0"
-        context["pulumi_github_version"] = "6.7.2"
+        context["pulumi_github_version"] = "6.7.3"
         context["pulumi_okta_version"] = "4.20.0"
-        context["boto3_version"] = "1.38.38"
+        context["boto3_version"] = "1.39.14"
         context["ephemeral_pulumi_deploy_version"] = "0.0.4"
         context["pydantic_version"] = "2.11.7"
         context["pyinstaller_version"] = "6.13.0"
@@ -36,12 +36,14 @@ class ContextUpdater(ContextHook):
         context["uvicorn_version"] = "0.35.0"
         context["lab_auto_pulumi_version"] = "0.1.15"
 
-        context["nuxt_ui_version"] = "^3.1.2"
-        context["nuxt_version"] = "^3.17.3"
+        context["nuxt_ui_version"] = "^3.3.0"
+        context["nuxt_version"] = "^3.18.0"
         context["typescript_version"] = "^5.8.2"
-        context["vue_version"] = "^3.5.13"
-        context["vue_router_version"] = "^4.5.0"
-        context["faker_version"] = "^9.8.0"
+        context["dot_env_cli_version"] = "^9.0.0"
+        context["playwright_version"] = "^1.52.0"
+        context["vue_version"] = "^3.5.18"
+        context["vue_router_version"] = "^4.5.1"
+        context["faker_version"] = "^9.9.0"
         context["graphql_codegen_cli_version"] = "^5.0.5"
         context["graphql_codegen_typescript_version"] = "^4.1.6"
 
