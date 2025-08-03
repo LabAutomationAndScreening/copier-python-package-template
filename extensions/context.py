@@ -10,7 +10,7 @@ class ContextUpdater(ContextHook):
 
     @override
     def hook(self, context: dict[Any, Any]) -> dict[Any, Any]:
-        context["uv_version"] = "0.8.3"
+        context["uv_version"] = "0.8.4"
         context["pnpm_version"] = "10.14.0"
         context["pre_commit_version"] = "4.2.0"
         context["pyright_version"] = "1.1.403"
