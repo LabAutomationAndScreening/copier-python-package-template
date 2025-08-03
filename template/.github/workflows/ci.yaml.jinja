@@ -85,6 +85,8 @@ jobs:
           - {{ item }}
 {% endfor %}{% raw %}
     runs-on: ${{ matrix.os }}
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
 
     steps:
       - name: Checkout code
@@ -118,6 +120,8 @@ jobs:
 {% endfor %}{% raw %}
 
     runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
 
     steps:
       - name: Checkout code
