@@ -197,6 +197,8 @@ jobs:
     name: Create the git tag
     if: ${{ github.event.inputs.publish_to_primary }}
     needs: [ install-from-staging ]
+    permissions:
+      contents: write # needed to push the tag
     runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
     steps:
       - name: Checkout code
