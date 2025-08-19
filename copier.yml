@@ -27,6 +27,10 @@ use_windows_in_ci:
     help: Should CI in the instantiated template also use Windows runners?
     default: no
 
+install_aws_ssm_port_forwarding_plugin:
+    type: bool
+    help: Should the AWS SSM Port Forwarding Plugin be installed?
+    default: no
 
 python_version:
     type: str

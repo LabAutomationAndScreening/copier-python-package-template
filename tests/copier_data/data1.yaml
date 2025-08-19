@@ -5,7 +5,7 @@ is_open_source: true
 description: Doing amazing things
 ssh_port_number: 12345
 use_windows_in_ci: false
-
+install_aws_ssm_port_forwarding_plugin: true
 
 
 python_package_registry: PyPI
