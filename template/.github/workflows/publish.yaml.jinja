@@ -198,7 +198,7 @@ jobs:
             code="$(curl -fsS -o /dev/null -w '%{http_code}' "https://test.pypi.org/pypi/${PKG}/${VER}/json" || true)"
             if [ "$code" = "200" ]; then
               echo "Found ${PKG}==${VER} on Test PyPI."
-              exit 0
+              break
             fi
             echo "Not yet available; sleeping 5s..."
             sleep 5
@@ -346,7 +346,7 @@ jobs:
             code="$(curl -fsS -o /dev/null -w '%{http_code}' "https://pypi.org/pypi/${PKG}/${VER}/json" || true)"
             if [ "$code" = "200" ]; then
               echo "Found ${PKG}==${VER} on PyPI."
-              exit 0
+              break
             fi
             echo "Not yet available; sleeping 5s..."
             sleep 5
