@@ -206,7 +206,7 @@ jobs:
 
   create-tag:
     name: Create the git tag
-    if: ${{ github.event.inputs.publish_to_primary }}
+    if: ${{ github.event.inputs.publish_to_primary == 'true' }}
     needs: [ install-from-staging ]
     permissions:
       contents: write # needed to push the tag
@@ -225,7 +225,7 @@ jobs:
 
   publish-to-primary:
     name: Publish Python distribution to Primary Package Registry
-    if: ${{ github.event.inputs.publish_to_primary }}
+    if: ${{ github.event.inputs.publish_to_primary == 'true' }}
     needs: [ create-tag ]
     runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
     environment:
@@ -260,7 +260,7 @@ jobs:
 
   install-from-primary:
     name: Install package from primary registry
-    if: ${{ github.event.inputs.publish_to_primary }}
+    if: ${{ github.event.inputs.publish_to_primary == 'true' }}
     needs: [ publish-to-primary, get-values ]
     strategy:
       matrix:
