@@ -203,10 +203,27 @@ jobs:
             echo "Not yet available; sleeping 5s..."
             sleep 5
           done
-          echo "Timeout waiting for ${PKG}==${VER} on Test PyPI."
+
+          if [ "$code" != "200" ]; then
+            echo "Timeout waiting for ${PKG}==${VER} on Test PyPI API."
+            exit 1
+          fi
+
+          # Then try to install with retries to ensure it's actually available in the index
+          for i in $(seq 1 12); do
+            if pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://www.pypi.org/simple "${PKG}==${VER}" --no-cache-dir --quiet; then
+              echo "Successfully installed ${PKG}==${VER}!"
+              exit 0
+            fi
+            echo "Package not yet installable; sleeping 10s... (attempt $i/12)"
+            sleep 10
+          done
+
+          echo "Timeout waiting for ${PKG}==${VER} to be installable."
           exit 1{% endraw %}{% endif %}{% raw %}
       - name: Install from staging registry
-        run: pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://www.pypi.org/simple {% endraw %}{{ package_name | replace('_', '-') }}{% raw %}==${{ needs.get-values.outputs.package-version }} --no-cache
+        if: ${{ runner.os == 'Windows' }}
+        run: pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://www.pypi.org/simple {% endraw %}{{ package_name | replace('_', '-') }}{% raw %}==${{ needs.get-values.outputs.package-version }} --no-cache-dir
       - name: Display dependencies
         run: pip list
       - name: Confirm library can be imported successfully
@@ -334,10 +351,27 @@ jobs:
             echo "Not yet available; sleeping 5s..."
             sleep 5
           done
-          echo "Timeout waiting for ${PKG}==${VER} on PyPI."
+
+          if [ "$code" != "200" ]; then
+            echo "Timeout waiting for ${PKG}==${VER} on PyPI API."
+            exit 1
+          fi
+
+          # Then try to install with retries to ensure it's actually available in the index
+          for i in $(seq 1 12); do
+            if pip install --index-url https://pypi.org/simple/ "${PKG}==${VER}" --no-cache-dir --quiet; then
+              echo "Successfully installed ${PKG}==${VER}!"
+              exit 0
+            fi
+            echo "Package not yet installable; sleeping 10s... (attempt $i/12)"
+            sleep 10
+          done
+
+          echo "Timeout waiting for ${PKG}==${VER} to be installable."
           exit 1{% endraw %}{% endif %}{% raw %}
       - name: Install from primary registry
-        run: pip install {% endraw %}{{ package_name | replace('_', '-') }}{% raw %}==${{ needs.get-values.outputs.package-version }} --no-cache
+        if: ${{ runner.os == 'Windows' }}
+        run: pip install {% endraw %}{{ package_name | replace('_', '-') }}{% raw %}==${{ needs.get-values.outputs.package-version }} --no-cache-dir
       - name: Display dependencies
         run: pip list
       - name: Confirm library can be imported successfully
