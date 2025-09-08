@@ -183,13 +183,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 {% endraw %}{% if python_package_registry == "PyPI" %}{% raw %}
-      - name: Sleep to allow PyPI Index to update before proceeding to the next step
-        if: ${{ runner.os == 'Windows' }}
-        uses: juliangruber/sleep-action@{% endraw %}{{ gha_sleep }}{% raw %}
-        with:
-          time: 60s
       - name: Wait for Test PyPI to serve the new version
-        if: ${{ runner.os != 'Windows' }}
+        shell: bash
         run: |
           set -euo pipefail
           PKG="{% endraw %}{{ package_name | replace('_', '-') }}{% raw %}"
@@ -221,9 +216,6 @@ jobs:
 
           echo "Timeout waiting for ${PKG}==${VER} to be installable."
           exit 1{% endraw %}{% endif %}{% raw %}
-      - name: Install from staging registry
-        if: ${{ runner.os == 'Windows' }}
-        run: pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://www.pypi.org/simple {% endraw %}{{ package_name | replace('_', '-') }}{% raw %}==${{ needs.get-values.outputs.package-version }} --no-cache-dir
       - name: Display dependencies
         run: pip list
       - name: Confirm library can be imported successfully
@@ -332,13 +324,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 {% endraw %}{% if python_package_registry == "PyPI" %}{% raw %}
-      - name: Sleep to allow PyPI Index to update before proceeding to the next step
-        if: ${{ runner.os == 'Windows' }}
-        uses: juliangruber/sleep-action@{% endraw %}{{ gha_sleep }}{% raw %}
-        with:
-          time: 60s
       - name: Wait for PyPI to serve the new version
-        if: ${{ runner.os != 'Windows' }}
+        shell: bash
         run: |
           set -euo pipefail
           PKG="{% endraw %}{{ package_name | replace('_', '-') }}{% raw %}"
@@ -370,9 +357,6 @@ jobs:
 
           echo "Timeout waiting for ${PKG}==${VER} to be installable."
           exit 1{% endraw %}{% endif %}{% raw %}
-      - name: Install from primary registry
-        if: ${{ runner.os == 'Windows' }}
-        run: pip install {% endraw %}{{ package_name | replace('_', '-') }}{% raw %}==${{ needs.get-values.outputs.package-version }} --no-cache-dir
       - name: Display dependencies
         run: pip list
       - name: Confirm library can be imported successfully
