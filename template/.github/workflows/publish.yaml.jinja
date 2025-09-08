@@ -229,6 +229,7 @@ jobs:
       - name: Confirm library can be imported successfully
         env:
           PYTHONPATH: ""  # avoid picking up local sources
+        shell: bash
         run: |
           python - <<'PY'
           import sys, importlib, importlib.util, importlib.metadata as md, pathlib
@@ -377,6 +378,7 @@ jobs:
       - name: Confirm library can be imported successfully
         env:
           PYTHONPATH: ""  # avoid picking up local sources
+        shell: bash
         run: |
           python - <<'PY'
           import sys, importlib, importlib.util, importlib.metadata as md, pathlib
