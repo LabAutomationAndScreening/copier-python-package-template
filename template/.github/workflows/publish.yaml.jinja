@@ -196,12 +196,20 @@ jobs:
           PYTHONPATH: ""  # avoid picking up local sources
         run: |
           python - <<'PY'
-          import sys, importlib, pathlib
+          import sys, importlib, importlib.util, importlib.metadata as md, pathlib
           print(f"Python version {sys.version}")
-          m = importlib.import_module("{% endraw %}{{ package_name | replace('-', '_') }}{% raw %}")
-          p = pathlib.Path(getattr(m, "__file__", ""))
+          mod_name = "{% endraw %}{{ package_name | replace('-', '_') }}{% raw %}"
+          dist_name = mod_name
+          m = importlib.import_module(mod_name)
+          spec = importlib.util.find_spec(mod_name)
+          origin = (getattr(spec, "origin", None) or getattr(m, "__file__", "")) or ""
+          p = pathlib.Path(origin)
           print(f"Imported from: {p}")
-          assert "site-packages" in str(p), f"Expected site-packages, got {p}"
+          assert any(s in str(p) for s in ("site-packages", "dist-packages")), f"Expected site/dist-packages, got {p}"
+          expected = "${{ needs.get-values.outputs.package-version }}"
+          installed = md.version(dist_name)
+          print(f"Installed distribution version: {installed} (expected {expected})")
+          assert installed == expected, f"Version mismatch: expected {expected}, got {installed}"
           PY
 
   create-tag:
@@ -301,10 +309,18 @@ jobs:
           PYTHONPATH: ""  # avoid picking up local sources
         run: |
           python - <<'PY'
-          import sys, importlib, pathlib
+          import sys, importlib, importlib.util, importlib.metadata as md, pathlib
           print(f"Python version {sys.version}")
-          m = importlib.import_module("{% endraw %}{{ package_name | replace('-', '_') }}{% raw %}")
-          p = pathlib.Path(getattr(m, "__file__", ""))
+          mod_name = "{% endraw %}{{ package_name | replace('-', '_') }}{% raw %}"
+          dist_name = mod_name
+          m = importlib.import_module(mod_name)
+          spec = importlib.util.find_spec(mod_name)
+          origin = (getattr(spec, "origin", None) or getattr(m, "__file__", "")) or ""
+          p = pathlib.Path(origin)
           print(f"Imported from: {p}")
-          assert "site-packages" in str(p), f"Expected site-packages, got {p}"
+          assert any(s in str(p) for s in ("site-packages", "dist-packages")), f"Expected site/dist-packages, got {p}"
+          expected = "${{ needs.get-values.outputs.package-version }}"
+          installed = md.version(dist_name)
+          print(f"Installed distribution version: {installed} (expected {expected})")
+          assert installed == expected, f"Version mismatch: expected {expected}, got {installed}"
           PY{% endraw %}
