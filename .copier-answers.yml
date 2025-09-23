@@ -8,7 +8,7 @@ python_ci_versions:
 python_version: 3.12.7
 repo_name: copier-python-package-template
 repo_org_name: LabAutomationAndScreening
-repo_org_name_for_copyright: LabAutomationAndScreening
+repo_org_name_for_copyright: Lab Automation & Screening
 ssh_port_number: 55874
 template_might_want_to_install_aws_ssm_port_forwarding_plugin: true
 template_uses_javascript: false
