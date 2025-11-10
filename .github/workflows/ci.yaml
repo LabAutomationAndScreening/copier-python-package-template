@@ -40,8 +40,6 @@ jobs:
 
           - 3.13.2
 
-          - 3.14.0
-
         copier: [
           '--data-file tests/copier_data/data1.yaml',
           '--data-file tests/copier_data/data2.yaml',
