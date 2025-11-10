@@ -11,10 +11,10 @@ class ContextUpdater(ContextHook):
     @override
     def hook(self, context: dict[Any, Any]) -> dict[Any, Any]:
         context["uv_version"] = "0.9.7"
-        context["pnpm_version"] = "10.20.0"
+        context["pnpm_version"] = "10.21.0"
         context["pre_commit_version"] = "4.3.0"
         context["pyright_version"] = "1.1.407"
-        context["pytest_version"] = "8.4.2"
+        context["pytest_version"] = "9.0.0"
         context["pytest_randomly_version"] = "4.0.1"
         context["pytest_cov_version"] = "7.0.0"
         context["copier_version"] = "9.10.3"
@@ -96,9 +96,9 @@ class ContextUpdater(ContextHook):
         context["gha_linux_runner"] = "ubuntu-24.04"
         context["gha_windows_runner"] = "windows-2025"
 
-        context["py311_version"] = ""
         context["py312_version"] = "3.12.7"
         context["py313_version"] = "3.13.2"
+        context["py314_version"] = "3.14.0"
 
         context["debian_release_name"] = "bookworm"
         context["alpine_image_version"] = "3.22"
