@@ -46,6 +46,7 @@ jobs:
           '--data-file tests/copier_data/data3.yaml',
           ]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
     env:
       UV_PYTHON: ${{ matrix.python-version }}
     permissions:
@@ -107,7 +108,7 @@ jobs:
         uses: ben-z/gh-action-mutex@1ebad517141198e08d47cf72f3c0975316620a65 # v1.0.0-alpha.10
         with:
           branch: mutex-venv-${{ matrix.os }}-${{ matrix.python-version }}
-        timeout-minutes: 30 # this is the amount of time this action will wait to attempt to acquire the mutex lock before failing, e.g. if other jobs are queued up in front of it
+        timeout-minutes: 8  # this is the amount of time this action will wait to attempt to acquire the mutex lock before failing, e.g. if other jobs are queued up in front of it
 
       - name: Cache Pre-commit hooks
         uses: actions/cache@v4.2.4
@@ -133,6 +134,7 @@ jobs:
 
   required-check:
     runs-on: ubuntu-24.04
+    timeout-minutes: 2
     needs: [ lint-matrix, get-values ]
     permissions:
       statuses: write # needed for updating status on Dependabot PRs
