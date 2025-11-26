@@ -47,6 +47,7 @@ jobs:
             JOB_MATCHING_DEV_ENV: true
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: {% endraw %}{{ gha_medium_timeout_minutes }}{% raw %}
     env:
       UV_PYTHON: ${{ matrix.python-version }}
     steps:
@@ -89,6 +90,7 @@ jobs:
           - {{ item }}
 {% endfor %}{% raw %}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: {% endraw %}{{ gha_medium_timeout_minutes }}{% raw %}
     env:
       UV_PYTHON: ${{ matrix.python-version }}
 
@@ -124,6 +126,7 @@ jobs:
 {% endfor %}{% raw %}
 
     runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
+    timeout-minutes: {% endraw %}{{ gha_medium_timeout_minutes }}{% raw %}
     env:
       UV_PYTHON: ${{ matrix.python-version }}
 
@@ -154,6 +157,7 @@ jobs:
       - build-docs{% endif %}{% if is_frozen_executable %}
       - executable{% endif %}{% raw %}
     if: always()
+    timeout-minutes: {% endraw %}{{ gha_short_timeout_minutes }}{% raw %}
     steps:
       - name: fail if prior job failure
         if: needs.test.result != 'success'{% endraw %}{% if create_docs %} || needs.build-docs.result != 'success'{% endif %}{% if is_frozen_executable %} || needs.executable.result != 'success'{% endif %}{% raw %}
