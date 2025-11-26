@@ -43,6 +43,7 @@ permissions:
 jobs:
   build-image:
     name: Build Docker Image
+    timeout-minutes: 15
     runs-on: ubuntu-24.04
     outputs:
       artifact-name: ${{ steps.calculate-build-context-hash.outputs.image_name_no_slashes }}
@@ -94,7 +95,7 @@ jobs:
         uses: ben-z/gh-action-mutex@1ebad517141198e08d47cf72f3c0975316620a65 # v1.0.0-alpha.10
         with:
           branch: mutex-${{ inputs.repository }}-${{ inputs.image_name }}
-        timeout-minutes: 30 # this is the amount of time this action will wait to attempt to acquire the mutex lock before failing, e.g. if other jobs are queued up in front of it
+        timeout-minutes: 8  # this is the amount of time this action will wait to attempt to acquire the mutex lock before failing, e.g. if other jobs are queued up in front of it
 
       - name: Test if docker image exists
         if: ${{ inputs.push-role-name != 'no-push' }}
