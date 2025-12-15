@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier
-_commit: v0.0.85
+_commit: v0.0.89
 _src_path: gh:LabAutomationAndScreening/copier-base-template.git
 description: Copier template for creating Python libraries and executables
 install_claude_cli: false
@@ -12,6 +12,8 @@ repo_org_name: LabAutomationAndScreening
 repo_org_name_for_copyright: Lab Automation & Screening
 ssh_port_number: 55874
 template_might_want_to_install_aws_ssm_port_forwarding_plugin: true
+template_might_want_to_use_python_asyncio: true
+template_might_want_to_use_vcrpy: true
 template_uses_javascript: false
 template_uses_pulumi: false
 template_uses_python: true
