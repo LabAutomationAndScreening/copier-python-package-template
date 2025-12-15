@@ -37,6 +37,15 @@ install_aws_ssm_port_forwarding_plugin:
     help: Should the AWS SSM Port Forwarding Plugin be installed?
     default: no
 
+configure_vcrpy:
+    type: bool
+    help: Should VCRpy be configured for use during unit testing in Python?
+    default: no
+configure_python_asyncio:
+    type: bool
+    help: Will python code be using asyncio?
+    default: no
+
 python_version:
     type: str
     help: What version of Python is used for development?

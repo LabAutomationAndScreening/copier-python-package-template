@@ -1,0 +1,17 @@
+{% raw %}import logging
+
+import pytest{% endraw %}{% if configure_vcrpy %}
+
+{% endif %}{% if configure_vcrpy %}{% raw %}from .vcrpy_fixtures import pytest_recording_configure  # noqa: F401 # this is configuration we need in conftest scope
+from .vcrpy_fixtures import vcr_config  # noqa: F401 # this is an autouse fixture{% endraw %}{% endif %}{% raw %}
+
+logger = logging.getLogger(__name__)
+
+
+def pytest_configure(
+    config: pytest.Config,{% endraw %}{% if configure_vcrpy %}{% raw %}  # noqa: ARG001 # the config argument MUST be present (even when unused) or pytest throws an error{% endraw %}{% endif %}{% raw %}
+):
+    """Configure pytest itself, such as logging levels."""{% endraw %}{% if configure_vcrpy %}{% raw %}
+    # force the vcr.cassette logger to WARNING+ because otherwise the logs get super noisy with the playback of all the cassettes
+    vcr_logger = logging.getLogger("vcr.cassette")
+    vcr_logger.setLevel(logging.WARNING){% endraw %}{% endif %}{% raw %}{% endraw %}

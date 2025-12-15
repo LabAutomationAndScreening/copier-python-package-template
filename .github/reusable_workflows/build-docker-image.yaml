@@ -66,13 +66,13 @@ jobs:
         shell: bash
 
       - name: Checkout code
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@v6.0.1
         with:
           persist-credentials: false
 
       - name: OIDC Auth for ECR
         if: ${{ inputs.push-role-name != 'no-push' }}
-        uses: aws-actions/configure-aws-credentials@v5.1.0
+        uses: aws-actions/configure-aws-credentials@v5.1.1
         with:
           role-to-assume: arn:aws:iam::${{ steps.parse_ecr_url.outputs.aws_account_id }}:role/${{ inputs.push-role-name }}
           aws-region: ${{ steps.parse_ecr_url.outputs.aws_region }}

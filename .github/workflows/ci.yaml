@@ -20,7 +20,8 @@ jobs:
       contents: write # needed for updating dependabot branches
 
   pre-commit:
-    needs: [ get-values ]
+    needs:
+      - get-values
     uses: ./.github/workflows/pre-commit.yaml
     permissions:
       contents: write # needed for mutex
@@ -29,7 +30,8 @@ jobs:
       python-version: 3.12.7
 
   lint-matrix:
-    needs: [ pre-commit ]
+    needs:
+      - pre-commit
     strategy:
       matrix:
         os:
@@ -54,7 +56,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@v6.0.1
         with:
           persist-credentials: false
 
@@ -111,7 +113,7 @@ jobs:
         timeout-minutes: 8  # this is the amount of time this action will wait to attempt to acquire the mutex lock before failing, e.g. if other jobs are queued up in front of it
 
       - name: Cache Pre-commit hooks
-        uses: actions/cache@v4.2.4
+        uses: actions/cache@v4.3.0
         env:
           cache-name: cache-pre-commit-hooks
         with:
@@ -123,7 +125,13 @@ jobs:
       - name: Run pre-commit
         run: |
           # skip devcontainer context hash because the template instantiation may make it different every time
-          SKIP=git-dirty,compute-devcontainer-context-hash pre-commit run -a
+          SKIP=git-dirty,compute-devcontainer-context-hash pre-commit run -a || PRE_COMMIT_EXIT_CODE=$?
+          if [ -n "$PRE_COMMIT_EXIT_CODE" ]; then
+            echo "Pre-commit failed with exit code $PRE_COMMIT_EXIT_CODE"
+            echo "Showing git diff:"
+            git --no-pager diff
+            exit $PRE_COMMIT_EXIT_CODE
+          fi
 
       - name: Upload pre-commit log if failure
         if: ${{ failure() }}
@@ -135,7 +143,9 @@ jobs:
   required-check:
     runs-on: ubuntu-24.04
     timeout-minutes: 2
-    needs: [ lint-matrix, get-values ]
+    needs:
+      - lint-matrix
+      - get-values
     permissions:
       statuses: write # needed for updating status on Dependabot PRs
     if: always()
