@@ -1,8 +1,8 @@
 {% raw %}import logging
 
 import pytest{% endraw %}{% if configure_python_asyncio or configure_vcrpy %}
-{% endif %}{% if configure_vcrpy %}{% raw %}
-from .vcrpy_fixtures import pytest_recording_configure  # noqa: F401 # this is configuration we need in conftest scope
+
+{% endif %}{% if configure_vcrpy %}{% raw %}from .vcrpy_fixtures import pytest_recording_configure  # noqa: F401 # this is configuration we need in conftest scope
 from .vcrpy_fixtures import vcr_config  # noqa: F401 # this is an autouse fixture{% endraw %}{% endif %}{% raw %}
 
 logger = logging.getLogger(__name__)
