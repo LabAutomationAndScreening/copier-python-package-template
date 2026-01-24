@@ -25,14 +25,14 @@ dev = [
 
 
     # Managed by upstream template
-    "pyright>={% endraw %}{{ pyright_version }}{% raw %}",
-    "pytest>={% endraw %}{{ pytest_version }}{% raw %}",
-    "pytest-cov>={% endraw %}{{ pytest_cov_version }}{% raw %}",
-    "pytest-randomly>={% endraw %}{{ pytest_randomly_version }}{% raw %}",{% endraw %}{% if configure_vcrpy %}{% raw %}
+    "pyright{% endraw %}{{ pyright_version }}{% raw %}",
+    "pytest{% endraw %}{{ pytest_version }}{% raw %}",
+    "pytest-cov{% endraw %}{{ pytest_cov_version }}{% raw %}",
+    "pytest-randomly{% endraw %}{{ pytest_randomly_version }}{% raw %}",{% endraw %}{% if configure_vcrpy %}{% raw %}
     "pytest-recording{% endraw %}{{ pytest_recording_version }}{% raw %}",
     "vcrpy{% endraw %}{{ vcrpy_version }}{% raw %}",{% endraw %}{% endif %}{% raw %}{% endraw %}{% if create_docs %}{% raw %}
     "sphinx=={% endraw %}{{ sphinx_version }}{% raw %}",{% endraw %}{% endif %}{% raw %}{% endraw %}{% if is_frozen_executable %}{% raw %}
-    "pyinstaller>={% endraw %}{{ pyinstaller_version }}{% raw %}",{% endraw %}{% endif %}{% raw %}
+    "pyinstaller{% endraw %}{{ pyinstaller_version }}{% raw %}",{% endraw %}{% endif %}{% raw %}
 ]
 
 [tool.setuptools]

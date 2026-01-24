@@ -156,7 +156,7 @@ jobs:
 
       - name: Upload Docker Image Artifact
         if: ${{ inputs.save-as-artifact }}
-        uses: actions/upload-artifact@v5.0.0
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: ${{ steps.calculate-build-context-hash.outputs.image_name_no_slashes }}
           path: ${{ steps.calculate-build-context-hash.outputs.image_name_no_slashes }}.tar
