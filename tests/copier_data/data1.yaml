@@ -5,6 +5,7 @@ is_open_source: true
 description: Doing amazing things
 install_claude_cli: false
 ssh_port_number: 12345
+pull_from_ecr: false
 use_windows_in_ci: false
 install_aws_ssm_port_forwarding_plugin: true
 configure_vcrpy: true
