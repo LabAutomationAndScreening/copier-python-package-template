@@ -157,6 +157,7 @@ jobs:
       statuses: write # needed for updating status on Dependabot PRs
     needs:
       - get-values
+      - lint
       - test{% endraw %}{% if create_docs %}
       - build-docs{% endif %}{% if is_frozen_executable %}
       - executable{% endif %}{% raw %}
@@ -167,7 +168,8 @@ jobs:
         run: |
           failure_pattern="^(failure|cancelled)$"
 
-          if [[ "${{ needs.get-values.result }}" =~ $failure_pattern ]] ||{% endraw %}{% if create_docs %}{% raw %}
+          if [[ "${{ needs.get-values.result }}" =~ $failure_pattern ]] ||
+              [[ "${{ needs.lint.result }}" =~ $failure_pattern ]] ||{% endraw %}{% if create_docs %}{% raw %}
               [[ "${{ needs.build-docs.result }}" =~ $failure_pattern ]] ||{% endraw %}{% endif %}{% raw %}{% endraw %}{% if is_frozen_executable %}{% raw %}
               [[ "${{ needs.executable.result }}" =~ $failure_pattern ]] ||{% endraw %}{% endif %}{% raw %}
               [[ "${{ needs.test.result }}" =~ $failure_pattern ]]; then
