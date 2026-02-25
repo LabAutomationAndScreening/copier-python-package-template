@@ -166,17 +166,17 @@ jobs:
     steps:
       - name: fail if prior job failure
         run: |
-          failure_pattern="^(failure|cancelled)$"
+          success_pattern="^(skipped|success)$" # these are the possibilities: https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#needs-context
 
-          if [[ "${{ needs.get-values.result }}" =~ $failure_pattern ]] ||
-              [[ "${{ needs.lint.result }}" =~ $failure_pattern ]] ||{% endraw %}{% if create_docs %}{% raw %}
-              [[ "${{ needs.build-docs.result }}" =~ $failure_pattern ]] ||{% endraw %}{% endif %}{% raw %}{% endraw %}{% if is_frozen_executable %}{% raw %}
-              [[ "${{ needs.executable.result }}" =~ $failure_pattern ]] ||{% endraw %}{% endif %}{% raw %}
-              [[ "${{ needs.test.result }}" =~ $failure_pattern ]]; then
-              echo "❌ One or more jobs failed or were cancelled"
+          if [[ ! "${{ needs.get-values.result }}" =~ $success_pattern ]] ||
+            [[ ! "${{ needs.lint.result }}" =~ $success_pattern ]] ||{% endraw %}{% if create_docs %}{% raw %}
+            [[ ! "${{ needs.build-docs.result }}" =~ $success_pattern ]] ||{% endraw %}{% endif %}{% raw %}{% endraw %}{% if is_frozen_executable %}{% raw %}
+            [[ ! "${{ needs.executable.result }}" =~ $success_pattern ]] ||{% endraw %}{% endif %}{% raw %}
+            [[ ! "${{ needs.test.result }}" =~ $success_pattern ]]; then
+            echo "❌ One or more jobs did not finish with skipped or success"
             exit 1
           fi
-          echo "✅ All jobs completed successfully or were skipped"
+          echo "✅ All jobs finished with skipped or success"
       - name: Mark updated Dependabot commit of devcontainer hash as succeeded
         if: needs.get-values.outputs.dependabot-commit-created == 'true'
         env:
