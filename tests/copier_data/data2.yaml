@@ -26,7 +26,7 @@ aws_region_for_stack: us-west-1
 # Data added based on the specifics of this template
 python_ci_versions:
   - "3.12.7"
-  - "3.13.2"
+  - "3.13.9"
   - "3.14.0"
 package_name: the-amazing-library
 primary_author: John Williams
