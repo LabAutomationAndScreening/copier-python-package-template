@@ -33,14 +33,14 @@ jobs:
     steps:
       - name: Checkout code during push
         if: ${{ github.event_name == 'push' }}
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6.0.2
         with:
           ref: ${{ github.ref_name }} # explicitly get the head of the branch, which will include any new commits pushed if this is a dependabot branch
           persist-credentials: false
 
       - name: Checkout code not during push
         if: ${{ github.event_name != 'push' }}
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6.0.2
         with:
           persist-credentials: false
 

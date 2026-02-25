@@ -76,7 +76,7 @@ python_ci_versions:
     multiselect: true
     choices:
       - "3.12.7"
-      - "3.13.2"
+      - "3.13.9"
       - "3.14.0"
 
 
@@ -143,6 +143,16 @@ use_codecov:
     help: Upload code coverage results to CodeCov?
     default: no
 
+_tasks:
+  - command: |
+        if [ -f ruff.toml ]; then
+            echo "Updating ruff target-version from python_version..."
+            py_major_minor="$(printf '%s' '{{ python_version }}' | cut -d. -f1,2)"
+            py_tag="py$(printf '%s' "$py_major_minor" | tr -d '.')"
+            sed -i -E 's/^target-version = "py[0-9]+"/target-version = "'"$py_tag"'"/' ruff.toml
+        else
+            echo "ruff.toml not found; skipping Ruff target-version update."
+        fi
 
 # Additional Settings
 _min_copier_version: "9.4"
