@@ -72,9 +72,9 @@ jobs:
 
       - name: OIDC Auth for ECR
         if: ${{ inputs.push-role-name != 'no-push' }}
-        uses: aws-actions/configure-aws-credentials@v5.1.1
+        uses: ./.github/actions/ecr-auth
         with:
-          role-to-assume: arn:aws:iam::${{ steps.parse_ecr_url.outputs.aws_account_id }}:role/${{ inputs.push-role-name }}
+          role-arn: arn:aws:iam::${{ steps.parse_ecr_url.outputs.aws_account_id }}:role/${{ inputs.push-role-name }}
           aws-region: ${{ steps.parse_ecr_url.outputs.aws_region }}
 
       - name: Calculate hash of files in build context
@@ -110,11 +110,6 @@ jobs:
             echo "Image was not found in ECR"; \
             echo "status=notfound" >> $GITHUB_OUTPUT
           fi
-
-      - name: Login to Amazon ECR
-        if: ${{ inputs.push-role-name != 'no-push' && (steps.check-if-exists.outputs.status == 'notfound' || inputs.save-as-artifact ) }}
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2.0.1
 
       - name: Pull existing image to package as artifact
         if: ${{ inputs.save-as-artifact && steps.check-if-exists.outputs.status == 'found' }}
@@ -156,7 +151,7 @@ jobs:
 
       - name: Upload Docker Image Artifact
         if: ${{ inputs.save-as-artifact }}
-        uses: actions/upload-artifact@v6.0.0
+        uses: actions/upload-artifact@v7.0.0
         with:
           name: ${{ steps.calculate-build-context-hash.outputs.image_name_no_slashes }}
           path: ${{ steps.calculate-build-context-hash.outputs.image_name_no_slashes }}.tar

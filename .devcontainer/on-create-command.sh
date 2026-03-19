@@ -6,6 +6,16 @@ set -ex
 git config --global --add safe.directory /workspaces/copier-python-package-template
 
 sh .devcontainer/on-create-command-boilerplate.sh
+# install json5 for merging claude settings.  TODO: consider if we can install json5 globally...or somehow eliminate this dependency
+script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+repo_root="$(CDPATH= cd -- "$script_dir/.." && pwd)"
+mkdir -p "$repo_root/.claude"
+chmod -R ug+rwX "$repo_root/.claude"
+chgrp -R 0 "$repo_root/.claude" || true
+npm --prefix "$repo_root/.claude" ci
+
+# Install beads for use in Claude planning
+npm install -g @beads/bd@0.57.0 # no specific reason for this version, just pinning for best practice
 
 pre-commit install --install-hooks
 

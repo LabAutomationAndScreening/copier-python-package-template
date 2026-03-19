@@ -1,8 +1,8 @@
 # Changes here will be overwritten by Copier
-_commit: v0.0.97
+_commit: v0.0.104
 _src_path: gh:LabAutomationAndScreening/copier-base-template.git
 description: Copier template for creating Python libraries and executables
-install_claude_cli: false
+install_claude_cli: true
 python_ci_versions:
 - 3.12.7
 - 3.13.9
