@@ -12,7 +12,7 @@
     "ghcr.io/devcontainers/features/aws-cli:1.1.2": {
       // https://github.com/devcontainers/features/blob/main/src/aws-cli/devcontainer-feature.json
       // view latest version https://raw.githubusercontent.com/aws/aws-cli/v2/CHANGELOG.rst
-      "version": "2.32.6",
+      "version": "2.32.6"
     },{% endraw %}{% endif %}{% raw %}
     "ghcr.io/devcontainers/features/python:1.8.0": {
       // https://github.com/devcontainers/features/blob/main/src/python/devcontainer-feature.json
@@ -36,12 +36,12 @@
         "-AmazonWebServices.aws-toolkit-vscode", // the AWS CLI feature installs this automatically, but it's causing problems in VS Code{% endraw %}{% endif %}{% raw %}
         // basic tooling
         // "eamodio.gitlens@15.5.1",
-        "coderabbit.coderabbit-vscode@0.17.0",
+        "coderabbit.coderabbit-vscode@0.18.3",
         "ms-vscode.live-server@0.5.2025051301",
         "MS-vsliveshare.vsliveshare@1.0.5905",
         "github.copilot@1.388.0",
-        "github.copilot-chat@0.38.2026022001",{% endraw %}{% if install_claude_cli %}{% raw %}
-        "anthropic.claude-code@2.1.49",{% endraw %}{% endif %}{% raw %}
+        "github.copilot-chat@0.38.2026022704",{% endraw %}{% if install_claude_cli %}{% raw %}
+        "anthropic.claude-code@2.1.74",{% endraw %}{% endif %}{% raw %}
 
         // Python
         "ms-python.python@2026.2.2026021801",
@@ -50,7 +50,7 @@
         "charliermarsh.ruff@2026.36.0",
 {% endraw %}{% if is_child_of_copier_base_template is not defined and template_uses_vuejs is defined and template_uses_vuejs is sameas(true) %}{% raw %}
         // VueJS
-        "vue.volar@3.2.1",
+        "vue.volar@3.2.5",
         "vitest.explorer@1.36.0",
 {% endraw %}{% endif %}{% raw %}{% endraw %}{% if is_child_of_copier_base_template is not defined and template_uses_javascript is defined and template_uses_javascript is sameas(true) %}{% raw %}
         // All javascript

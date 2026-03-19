@@ -143,7 +143,13 @@ use_codecov:
     help: Upload code coverage results to CodeCov?
     default: no
 
+
 _tasks:
+  - command: |
+        python3 '{{ _copier_conf.src_path }}/src/copier_tasks/remove_precommit_hooks.py' \
+            --hook-id-regex '^\s*-\s+id:\s+merge-claude-settings\s*$' \
+            --target-file .pre-commit-config.yaml
+    when: "{{ not install_claude_cli }}"
   - command: |
         if [ -f ruff.toml ]; then
             echo "Updating ruff target-version from python_version..."
@@ -155,7 +161,7 @@ _tasks:
         fi
 
 # Additional Settings
-_min_copier_version: "9.4"
+_min_copier_version: "9.7"
 
 _subdirectory: template
 
