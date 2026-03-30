@@ -1,4 +1,8 @@
 {
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "4gb"
+  },
   "dockerComposeFile": "docker-compose.yml",
   "service": "devcontainer",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
@@ -22,21 +26,21 @@
         "ms-vscode.live-server@0.5.2025051301",
         "MS-vsliveshare.vsliveshare@1.0.5905",
         "github.copilot@1.388.0",
-        "github.copilot-chat@0.38.2026022704",
-        "anthropic.claude-code@2.1.74",
+        "github.copilot-chat@0.42.2026032602",
+        "anthropic.claude-code@2.1.84",
 
         // Python
-        "ms-python.python@2026.2.2026021801",
-        "ms-python.vscode-pylance@2026.1.1",
+        "ms-python.python@2026.5.2026032701",
+        "ms-python.vscode-pylance@2026.1.102",
         "ms-vscode-remote.remote-containers@0.414.0",
-        "charliermarsh.ruff@2026.36.0",
+        "charliermarsh.ruff@2026.38.0",
 
         // Misc file formats
         "bierner.markdown-mermaid@1.29.0",
         "samuelcolvin.jinjahtml@0.20.0",
         "tamasfe.even-better-toml@0.19.2",
         "emilast.LogFileHighlighter@3.3.3",
-        "esbenp.prettier-vscode@12.3.0"
+        "esbenp.prettier-vscode@12.4.0"
       ],
       "settings": {
         "editor.accessibilitySupport": "off", // turn off sounds
@@ -61,5 +65,5 @@
   "initializeCommand": "sh .devcontainer/initialize-command.sh",
   "onCreateCommand": "sh .devcontainer/on-create-command.sh",
   "postStartCommand": "sh .devcontainer/post-start-command.sh"
-  // Devcontainer context hash (do not manually edit this, it's managed by a pre-commit hook): c4997eda # spellchecker:disable-line
+  // Devcontainer context hash (do not manually edit this, it's managed by a pre-commit hook): d77a3ff3 # spellchecker:disable-line
 }
