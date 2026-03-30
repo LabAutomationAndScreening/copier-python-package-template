@@ -83,8 +83,8 @@ jobs:
       - name: Install python tooling
         uses: ./.github/actions/install_deps
         with:
-          skip-installing-ssm-plugin-manager: false
-          skip-installing-pulumi-cli: false
+          skip-installing-ssm-plugin-manager: true
+          skip-installing-pulumi-cli: true
           python-version: ${{ matrix.python-version }}{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
           code-artifact-auth-role-name: CoreInfraBaseAccess
           code-artifact-auth-role-account-id: {% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}
@@ -131,6 +131,8 @@ jobs:
       - name: Install python tooling
         uses: ./.github/actions/install_deps
         with:
+          skip-installing-ssm-plugin-manager: true
+          skip-installing-pulumi-cli: true
           python-version: ${{ matrix.python-version }}{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
           code-artifact-auth-role-name: CoreInfraBaseAccess
           code-artifact-auth-role-account-id: {% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}
@@ -171,6 +173,8 @@ jobs:
       - name: Install python tooling
         uses: ./.github/actions/install_deps
         with:
+          skip-installing-ssm-plugin-manager: true
+          skip-installing-pulumi-cli: true
           python-version: ${{ matrix.python-version }}{% endraw %}{% if python_package_registry == "AWS CodeArtifact" %}{% raw %}
           code-artifact-auth-role-name: CoreInfraBaseAccess
           code-artifact-auth-role-account-id: "{% endraw %}{{ aws_central_infrastructure_account_id }}{% raw %}"
