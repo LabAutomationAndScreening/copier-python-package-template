@@ -23,6 +23,7 @@ jobs:
 
   check-skip-duplicate:
     runs-on: ubuntu-24.04
+    timeout-minutes: 2
     outputs:
       should-run: ${{ steps.check.outputs.should-run }}
     steps:
