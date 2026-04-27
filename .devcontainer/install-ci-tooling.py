@@ -7,9 +7,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-UV_VERSION = "0.10.12"
-PNPM_VERSION = "10.33.0"
-COPIER_VERSION = "==9.14.0"
+UV_VERSION = "0.11.7"
+PNPM_VERSION = "10.33.1"
+COPIER_VERSION = "==9.14.3"
 COPIER_TEMPLATE_EXTENSIONS_VERSION = "==0.3.3"
 PRE_COMMIT_VERSION = "4.5.1"
 GITHUB_WINDOWS_RUNNER_BIN_PATH = r"C:\Users\runneradmin\.local\bin"

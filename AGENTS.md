@@ -25,6 +25,21 @@ This project is a Copier template used to generate other copier templates. It is
 - Avoid loops in tests — assert each item explicitly so failures pinpoint the exact element. When verifying a condition across all items in a collection, collect the violations into a list and assert it's empty (e.g., assert [x for x in items if bad_condition(x)] == []).
 - When a test's final assertion is an absence (e.g., element is `null`, list is empty, modal is closed), include a prior presence assertion confirming the expected state existed before the action that removed it. A test whose only assertion is an absence check can pass vacuously if setup silently failed.
 - When asserting a mock or spy was called with specific arguments, always constrain as tightly as possible. In order of preference: (1) assert called exactly once with those args (`assert_called_once_with` in Python, `toHaveBeenCalledExactlyOnceWith` in Vitest/Jest); (2) if multiple calls are expected, assert the total call count and use a positional or last-call assertion (`nthCalledWith`, `lastCalledWith` / `assert_has_calls` with `call_args_list[n]`); (3) plain "called with at any point" (`toHaveBeenCalledWith`, `assert_called_with`) is a last resort only when neither the call count nor the call order can reasonably be constrained.
+- When asserting an exception is raised, verify the error message includes all key constructor arguments — not just one identifying field. This ensures the error message is fully populated and catches cases where arguments are swapped or missing. In Python: use the `match` parameter in `pytest.raises`. In TypeScript: use a regex or substring in `toThrow`, or catch and assert on error properties individually.
+- Structure each test body in this order, with a single blank line separating each section:
+  1. **Constants** — random/faker values and test data objects
+  2. **Mocks/spies** — all spy and patch setups
+  3. **Arrange** — setup calls that establish the precondition (mounting, pre-act interactions, etc.)
+  4. *(blank line)*
+  5. **Act** — the action under test
+  6. *(blank line)*
+  7. **State capture** — variables extracted from the system under test purely for use in assertions (DOM queries, return values, captured state)
+  8. *(blank line)*
+  9. **Assertions**
+
+  For tests with multiple interaction steps (e.g. E2E or complex flows), repeat the Act → State capture → Assertions cycle, with a blank line between each cycle.
+
+  Keep blank lines to a minimum: only where they separate meaningful sections to enhance code readability.
 
 ### Python Testing
 
@@ -51,13 +66,14 @@ This project is a Copier template used to generate other copier templates. It is
 
 ## Tooling
 
+- ❌ Never chain commands (`&&`, `||`, `;`, `&`) — breaks permission allow-list matcher. ✅ One command per tool call. `cd` as separate prior call. Pipes (`|`) OK.
 - ❌ Never use `python3` or `python` directly. ✅ Always use `uv run python` for Python commands.
 - ❌ Never use `python3`/`python` for one-off data tasks. ✅ Use `jq` for JSON parsing, standard shell builtins for string manipulation. Only reach for `uv run python` when no dedicated tool covers the need.
+- ❌ Never use `uv run python -c "import ...; print(...)"` or `inspect` to introspect Python source. ✅ Read source files directly or grep for symbols — the code is on disk and can be read without running it.
 - Check .devcontainer/devcontainer.json for tooling versions (Python, Node, etc.) when reasoning about version-specific stdlib or tooling behavior.
 - For frontend tests, run commands via `pnpm` scripts from `frontend/package.json` — never invoke tools directly (not pnpm exec <tool>, npx <tool>, etc.). ✅ pnpm test-unit  ❌ pnpm vitest ... or npx vitest ...
 - For linting and type-checking, prefer `pre-commit run <hook-id>` over invoking tools directly — this matches the permission allow-list and mirrors what CI runs. Key hook IDs: `typescript-check`, `eslint`, `pyright`, `ruff`, `ruff-format`.
 - Never rely on IDE diagnostics for ruff warnings — the IDE may not respect the project's ruff.toml config. Run `pre-commit run ruff -a` to get accurate results.
-- When running terminal commands, execute exactly one command per tool call. Do not chain commands with &&, ||, ;, or & — this prohibition has no exceptions, even for `cd && ...` patterns. Use `cd` to change to the directory you want before running the command, avoiding the need to chain. Pipes (|) are allowed for output transformation (e.g., head, tail, grep). If two sequential commands are needed, run them in separate tool calls. Chained commands break the permission allow-list matcher and cause unnecessary permission prompts
 - Never use `pnpm --prefix <path>` or `uv --directory <path>` to target a different directory — these flags break the permission allow-list matcher the same way chained `cd &&` commands do. Instead, rely on the working directory already being correct (the cwd persists between Bash tool calls), or issue a plain `cd <path>` as a separate prior tool call to reposition before running the command.
 - Never use backslash line continuations in shell commands — always write the full command on a single line. Backslashes break the permission allow-list matcher.
 - **Never manually edit files in any `generated/` folder.** These files are produced by codegen tooling (typically Kiota) and any manual changes will be overwritten. If a generated file needs to change, update the source (e.g. the OpenAPI schema) and re-run the generator.
@@ -106,7 +122,7 @@ bd close bd-42 --reason "Completed" --json
 After every CRUD command on an issue, export it:
 
 ```bash
-bd export -o .claude/.beads/issues-dump.jsonl
+bd export -o [relative path to repository root]/.claude/.beads/issues-dump.jsonl
 ```
 
 ### Issue Types

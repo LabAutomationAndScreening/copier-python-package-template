@@ -6,6 +6,7 @@ description: Doing amazing things
 install_claude_cli: false
 ssh_port_number: 12345
 pull_from_ecr: false
+repo_names_for_codespaces_read_permissions: ''
 use_windows_in_ci: false
 install_aws_ssm_port_forwarding_plugin: true
 configure_vcrpy: true
@@ -18,6 +19,7 @@ aws_org_home_region: us-west-2
 aws_production_account_id: 123456789012
 use_staging_environment: false
 aws_region_for_stack: us-east-2
+
 # Data added based on the specifics of this template
 python_ci_versions:
   - 3.12.7
