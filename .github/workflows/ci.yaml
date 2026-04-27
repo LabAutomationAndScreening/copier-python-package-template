@@ -24,6 +24,9 @@ jobs:
   check-skip-duplicate:
     runs-on: ubuntu-24.04
     timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read # needed to check if PR exists for current branch
     outputs:
       should-run: ${{ steps.check.outputs.should-run }}
     steps:
@@ -151,6 +154,7 @@ jobs:
 
       - name: install new dependencies
         env:
+          SKIP_PLAYWRIGHT_INSTALL: "1"
           # Provide a fake token so it doesn't attempt to access AWS to generate a new one when the script is run if CodeArtifact is set as the registry
           CODEARTIFACT_AUTH_TOKEN: 'faketoken'
         run: |
@@ -169,7 +173,7 @@ jobs:
         timeout-minutes: 8  # this is the amount of time this action will wait to attempt to acquire the mutex lock before failing, e.g. if other jobs are queued up in front of it
 
       - name: Cache Pre-commit hooks
-        uses: actions/cache@v5.0.3
+        uses: actions/cache@v5.0.4
         env:
           cache-name: cache-pre-commit-hooks
         with:
