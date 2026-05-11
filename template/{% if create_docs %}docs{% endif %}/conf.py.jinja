@@ -7,7 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "{% endraw %}{{ package_name }}{% raw %}"
-copyright = "2024, {% endraw %}{{ primary_author }}{% raw %}"
+copyright = "2024, {% endraw %}{{ primary_author }}{% raw %}"  # noqa: A001  # Sphinx requires this exact variable name
 author = "{% endraw %}{{ primary_author }}{% raw %}"
 
 # -- General configuration ---------------------------------------------------
