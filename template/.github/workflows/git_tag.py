@@ -1,1 +1,1 @@
-../../../src/git_tag.py
+../../../copier_template_resources/git_tag.py
