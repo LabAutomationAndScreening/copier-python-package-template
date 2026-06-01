@@ -34,6 +34,6 @@ package_name: the-amazing-library
 primary_author: John Williams
 full_repo_url: https://www.github.com/baz
 create_docs: yes
-is_frozen_executable: no
+deploy_as_executable: no
 use_windows_in_exe_ci: no
 use_codecov: yes
