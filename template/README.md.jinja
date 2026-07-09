@@ -1,4 +1,12 @@
-{% raw %}[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
+{#
+ ============== WARNING ==============================================================================
+ File is managed by copier template: gh:LabAutomationAndScreening/copier-base-template.git
+ See .config/.copier-managed-files.json for details.
+
+ You are welcome to make changes to this file in your repo if they are custom to your project,
+ but if the change should be shared with other projects, please backport it to the template repo.
+ =====================================================================================================
+#}{% raw %}[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Checked with pyright](https://microsoft.github.io/pyright/img/pyright_badge.svg)](https://microsoft.github.io/pyright/)
@@ -25,4 +33,4 @@ To publish a new version of the repository, you can run the `Publish` workflow m
 
 ## Updating from the template
 This repository uses a copier template. To pull in the latest updates from the template, use the command:
-`copier update --trust --conflict rej --defaults`{% endraw %}
+`copier update --answers-file .config/.copier-answers.yml --trust --conflict rej --defaults`{% endraw %}
