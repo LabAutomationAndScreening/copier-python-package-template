@@ -1,13 +1,21 @@
+# ============== WARNING ==============================================================================
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-base-template.git
+# See .config/.copier-managed-files.json for details.
+#
+# You are welcome to make changes to this file in your repo if they are custom to your project,
+# but if the change should be shared with other projects, please backport it to the template repo.
+# =====================================================================================================
 import re
 import shutil
 import subprocess
 from pathlib import Path
 
+from .helpers import PROJECT_ROOT
+from .helpers import SCRIPT_PATH_ROOT
 from .helpers import run_copier_task
 
 _EXIT_CODE_INVALID_REGEX = 2
-_PROJECT_ROOT = Path(__file__).resolve().parents[3]
-_SCRIPT_PATH = _PROJECT_ROOT / "src" / "copier_tasks" / "remove_precommit_hooks.py"
+_SCRIPT_PATH = SCRIPT_PATH_ROOT / "remove_precommit_hooks.py"
 
 
 class TestRemovePrecommitHooksViaSubprocess:
@@ -15,7 +23,7 @@ class TestRemovePrecommitHooksViaSubprocess:
         return run_copier_task(_SCRIPT_PATH, "--hook-id-regex", hook_id_regex, "--target-file", str(target_file))
 
     def test_When_run_with_matching_hook__Then_hook_removed(self, tmp_path: Path) -> None:
-        source_config = _PROJECT_ROOT / ".pre-commit-config.yaml"
+        source_config = PROJECT_ROOT / ".pre-commit-config.yaml"
         config_path = tmp_path / ".pre-commit-config.yaml"
         _ = shutil.copyfile(source_config, config_path)
         original = config_path.read_text(encoding="utf-8")
@@ -32,7 +40,7 @@ class TestRemovePrecommitHooksViaSubprocess:
         assert "id: trailing-whitespace" in updated
 
     def test_When_run_with_no_matching_hook__Then_file_unchanged(self, tmp_path: Path) -> None:
-        source_config = _PROJECT_ROOT / ".pre-commit-config.yaml"
+        source_config = PROJECT_ROOT / ".pre-commit-config.yaml"
         config_path = tmp_path / ".pre-commit-config.yaml"
         _ = shutil.copyfile(source_config, config_path)
         original = config_path.read_text(encoding="utf-8")
@@ -60,7 +68,7 @@ class TestRemovePrecommitHooksViaSubprocess:
         assert "Invalid regex pattern" in result.stdout
 
     def test_When_multiple_hooks_match__Then_all_removed_and_count_reported(self, tmp_path: Path) -> None:
-        source_config = _PROJECT_ROOT / ".pre-commit-config.yaml"
+        source_config = PROJECT_ROOT / ".pre-commit-config.yaml"
         config_path = tmp_path / ".pre-commit-config.yaml"
         _ = shutil.copyfile(source_config, config_path)
 
