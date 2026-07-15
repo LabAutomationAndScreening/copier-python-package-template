@@ -183,6 +183,7 @@
         "template/.github/actions/update-devcontainer-hash/action.yml",
         "template/.github/pull_request_template.md",
         "template/.github/workflows/confirm-on-tagged-copier-template.yaml",
+        "template/.github/workflows/extract_project_version.py",
         "template/.github/workflows/get-values.yaml",
         "template/.github/workflows/git_tag.py",
         "template/.github/workflows/hash_git_files.py",
