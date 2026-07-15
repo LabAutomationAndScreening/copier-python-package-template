@@ -107,7 +107,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: {% endraw %}{{ full_repo_url | replace("https://github.com/", "") }}{% raw %}{% endraw %}{% endif %}{% raw %}
 
-{% endraw %}{% if not is_frozen_executable %}{% raw %}
+{% endraw %}{% if not deploy_as_executable %}{% raw %}
   build:
     needs:
       - test
@@ -237,7 +237,7 @@ jobs:
       - get-values
       - check-skip-duplicate
       - lint
-      - test{% endraw %}{% if not is_frozen_executable %}
+      - test{% endraw %}{% if not deploy_as_executable %}
       - build{% endif %}{% if create_docs %}
       - build-docs{% endif %}{% if deploy_as_executable %}
       - executable{% endif %}{% raw %}
@@ -252,7 +252,7 @@ jobs:
 
           if [[ ! "${{ needs.get-values.result }}" =~ $success_pattern ]] ||
             [[ ! "${{ needs.check-skip-duplicate.result }}" =~ $success_pattern ]] ||
-            [[ ! "${{ needs.lint.result }}" =~ $success_pattern ]] ||{% endraw %}{% if not is_frozen_executable %}{% raw %}
+            [[ ! "${{ needs.lint.result }}" =~ $success_pattern ]] ||{% endraw %}{% if not deploy_as_executable %}{% raw %}
             [[ ! "${{ needs.build.result }}" =~ $success_pattern ]] ||{% endraw %}{% endif %}{% if create_docs %}{% raw %}
             [[ ! "${{ needs.build-docs.result }}" =~ $success_pattern ]] ||{% endraw %}{% endif %}{% raw %}{% endraw %}{% if deploy_as_executable %}{% raw %}
             [[ ! "${{ needs.executable.result }}" =~ $success_pattern ]] ||{% endraw %}{% endif %}{% raw %}
