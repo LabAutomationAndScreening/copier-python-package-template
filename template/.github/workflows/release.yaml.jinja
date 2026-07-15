@@ -190,7 +190,7 @@ jobs:
           DOWNLOAD_DIR="$(mktemp -d)"
           for i in $(seq 1 12); do
             if pip download --no-deps --index-url https://test.pypi.org/simple/ "${PKG}==${VER}" --dest "${DOWNLOAD_DIR}" --no-cache-dir --quiet; then
-              if pip install --index-url https://www.pypi.org/simple --find-links "${DOWNLOAD_DIR}" "${PKG}==${VER}" --no-cache-dir --quiet; then
+              if pip install --index-url https://pypi.org/simple --find-links "${DOWNLOAD_DIR}" "${PKG}==${VER}" --no-cache-dir --quiet; then
                 echo "Successfully installed ${PKG}==${VER}"
                 exit 0
               fi
