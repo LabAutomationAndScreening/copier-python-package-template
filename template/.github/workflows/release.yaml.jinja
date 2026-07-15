@@ -224,15 +224,14 @@ jobs:
           print(f"Installed distribution version: {installed} (expected {expected})")
           assert installed == expected, f"Version mismatch: expected {expected}, got {installed}"
           PY
-{% endraw %}{% endif %}{% raw %}
 
   create-tag:
     name: Create the git tag
     if: ${{ !inputs.dry_run }}
     timeout-minutes: {% endraw %}{{ gha_medium_timeout_minutes }}{% raw %}
     needs:
-{% endraw %}{% if not deploy_as_executable %}{% raw %}      - install-from-staging
-{% endraw %}{% endif %}{% raw %}      - guard
+      - install-from-staging
+      - guard
     permissions:
       contents: write # needed to push the tag
     runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
@@ -247,7 +246,6 @@ jobs:
         run: python3 ./.github/workflows/git_tag.py --version "${{ needs.guard.outputs.version }}" --confirm-tag-not-present
       - name: Create tag
         run: python3 ./.github/workflows/git_tag.py --version "${{ needs.guard.outputs.version }}" --push-tag-to-remote
-{% endraw %}{% if not deploy_as_executable %}{% raw %}
 
   publish-to-primary:
     name: Publish Python distribution to Primary Package Registry
@@ -388,7 +386,6 @@ jobs:
     timeout-minutes: {% endraw %}{{ gha_short_timeout_minutes }}{% raw %}
     needs:
 {% endraw %}{% if not deploy_as_executable %}{% raw %}      - install-from-primary
-{% endraw %}{% else %}{% raw %}      - create-tag
 {% endraw %}{% endif %}{% raw %}      - guard
     permissions:
       contents: write # needed to create GitHub releases{% endraw %}{% if deploy_as_executable %}{% raw %}
