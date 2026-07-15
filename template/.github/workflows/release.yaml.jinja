@@ -410,5 +410,4 @@ jobs:
           generate_release_notes: true{% endraw %}{% if deploy_as_executable %}{% raw %}
           fail_on_unmatched_files: true
           files: |{% endraw %}{% set exe_os_list = [gha_linux_runner] + ([gha_windows_runner] if use_windows_in_exe_ci else []) %}{% for exe_os in exe_os_list %}{% for exe_py in python_ci_versions %}{% set ext = "tar" if exe_os == gha_linux_runner else "zip" %}
-            {{ repo_name }}-{{ exe_os }}-{{ exe_py }}-v{% raw %}${{ needs.guard.outputs.version }}{% endraw %}.{{ ext }}{% endfor %}{% endfor %}{% endif %}{% raw %}
-{% endraw %}
+            {{ repo_name }}-{{ exe_os }}-{{ exe_py }}-v{% raw %}${{ needs.guard.outputs.version }}{% endraw %}.{{ ext }}{% endfor %}{% endfor %}{% endif %}{% raw %}{% endraw %}
