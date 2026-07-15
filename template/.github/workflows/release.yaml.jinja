@@ -254,10 +254,10 @@ jobs:
       - create-tag
       - guard
     timeout-minutes: {% endraw %}{{ gha_medium_timeout_minutes }}{% raw %}
-    runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
+    runs-on: {% endraw %}{{ gha_linux_runner }}{% if python_package_registry == "PyPI" %}{% raw %}
     environment:
       name: pypi
-      url: https://pypi.org/p/{% endraw %}{{ package_name | replace('_', '-') }}{% raw %}
+      url: https://pypi.org/p/{% endraw %}{{ package_name | replace('_', '-') }}{% endif %}{% raw %}
     permissions:
       attestations: write
       id-token: write
