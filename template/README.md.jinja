@@ -25,11 +25,12 @@ Documentation is hosted on [ReadTheDocs](https://{% endraw %}{{ package_name }}{
 # Development
 This project has a dev container. If you already have VS Code and Docker installed, you can click the badge above or [here](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url={% endraw %}{{ full_repo_url }}{% raw %}) to get started. Clicking these links will cause VS Code to automatically install the Dev Containers extension if needed, clone the source code into a container volume, and spin up a dev container for use.
 
-To publish a new version of the repository, you can run the `Publish` workflow manually and publish to the staging registry from any branch, and you can check the 'Publish to Primary' option when on `main` to publish to the primary registry and create a git tag.
+{% endraw %}{% if not deploy_as_executable %}{% raw %}To publish a new version of the repository, you can run the `Publish` workflow manually and publish to the staging registry from any branch, and you can check the 'Publish to Primary' option when on `main` to publish to the primary registry and create a git tag.
 
-The `Release` workflow is an alternative that reuses the checks from CI instead of re-running them. Rather than rebuilding and re-testing, it requires that the `CI` workflow has already completed successfully for the current commit (including the `workflow-summary` job) and downloads the distribution that CI built. Trigger it manually with `workflow_dispatch`; a real release must be run from `main`, while the `dry_run` option lets you exercise the workflow from any branch without publishing, tagging, or creating a release. A real run publishes to the staging registry and verifies a fresh install, then pushes the `v<version>` git tag, publishes to the primary registry, verifies the install again, and finally creates a GitHub Release with auto-generated notes.
-
+{% endraw %}{% endif %}{% raw %}The `Release` workflow reuses the checks from CI instead of re-running them: it requires that the `CI` workflow has already completed successfully for the current commit (including the `workflow-summary` job) and reuses the artifacts CI built rather than rebuilding. Trigger it manually with `workflow_dispatch`; a real release must be run from `main`, while the `dry_run` option lets you exercise the workflow from any branch without tagging or releasing. {% endraw %}{% if deploy_as_executable %}{% raw %}A real run pushes the `v<version>` git tag and creates a GitHub Release, attaching the executable that CI built for every OS and Python version.{% endraw %}{% else %}{% raw %}A real run publishes the CI-built distribution to the staging registry and verifies a fresh install, then pushes the `v<version>` git tag, publishes to the primary registry, verifies the install again, and finally creates a GitHub Release with auto-generated notes.{% endraw %}{% endif %}{% raw %}
+{% endraw %}{% if not deploy_as_executable %}{% raw %}
 <!-- TODO: migrate away from the `Publish` and `Publish to Staging` workflows and merge all of their functionality into the `Release` workflow. -->
+{% endraw %}{% endif %}{% raw %}
 
 
 

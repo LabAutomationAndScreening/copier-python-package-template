@@ -90,6 +90,7 @@ jobs:
               exit 1
             fi
           fi
+{% endraw %}{% if not deploy_as_executable %}{% raw %}
 
   publish-to-staging:
     name: Publish Python distribution to Staging Package Registry
@@ -220,14 +221,15 @@ jobs:
           print(f"Installed distribution version: {installed} (expected {expected})")
           assert installed == expected, f"Version mismatch: expected {expected}, got {installed}"
           PY
+{% endraw %}{% endif %}{% raw %}
 
   create-tag:
     name: Create the git tag
     if: ${{ !inputs.dry_run }}
     timeout-minutes: {% endraw %}{{ gha_medium_timeout_minutes }}{% raw %}
     needs:
-      - install-from-staging
-      - guard
+{% endraw %}{% if not deploy_as_executable %}{% raw %}      - install-from-staging
+{% endraw %}{% endif %}{% raw %}      - guard
     permissions:
       contents: write # needed to push the tag
     runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
@@ -242,6 +244,7 @@ jobs:
         run: python3 ./.github/workflows/git_tag.py --version "${{ needs.guard.outputs.version }}" --confirm-tag-not-present
       - name: Create tag
         run: python3 ./.github/workflows/git_tag.py --version "${{ needs.guard.outputs.version }}" --push-tag-to-remote
+{% endraw %}{% if not deploy_as_executable %}{% raw %}
 
   publish-to-primary:
     name: Publish Python distribution to Primary Package Registry
@@ -373,6 +376,7 @@ jobs:
           print(f"Installed distribution version: {installed} (expected {expected})")
           assert installed == expected, f"Version mismatch: expected {expected}, got {installed}"
           PY
+{% endraw %}{% endif %}{% raw %}
 
   release:
     name: Create GitHub Release
@@ -380,14 +384,31 @@ jobs:
     runs-on: {% endraw %}{{ gha_linux_runner }}{% raw %}
     timeout-minutes: {% endraw %}{{ gha_short_timeout_minutes }}{% raw %}
     needs:
-      - install-from-primary
-      - guard
+{% endraw %}{% if not deploy_as_executable %}{% raw %}      - install-from-primary
+{% endraw %}{% else %}{% raw %}      - create-tag
+{% endraw %}{% endif %}{% raw %}      - guard
     permissions:
-      contents: write # needed to create GitHub releases
-    steps:
+      contents: write # needed to create GitHub releases{% endraw %}{% if deploy_as_executable %}{% raw %}
+      actions: read # needed to download the executable artifacts from the CI run{% endraw %}{% endif %}{% raw %}
+    steps:{% endraw %}{% if deploy_as_executable %}{% set exe_os_list = [gha_linux_runner] + ([gha_windows_runner] if use_windows_in_exe_ci else []) %}{% for exe_os in exe_os_list %}{% for exe_py in python_ci_versions %}{% set ext = "tar" if exe_os == gha_linux_runner else "zip" %}{% raw %}
+      - name: Download executable artifact ({% endraw %}{{ exe_os }} py{{ exe_py }}{% raw %})
+        uses: actions/download-artifact@{% endraw %}{{ gha_download_artifact }}{% raw %}
+        with:
+          name: exe-{% endraw %}{{ exe_os }}-{{ exe_py }}{% raw %}
+          path: artifacts/{% endraw %}{{ exe_os }}-{{ exe_py }}{% raw %}
+          run-id: ${{ needs.guard.outputs.ci-run-id }}
+          github-token: ${{ github.token }}
+      - name: Package executable ({% endraw %}{{ exe_os }} py{{ exe_py }}{% raw %})
+        shell: bash
+        run: {% endraw %}{% if exe_os == gha_linux_runner %}tar -cf "{{ repo_name }}-{{ exe_os }}-{{ exe_py }}-v{% raw %}${{ needs.guard.outputs.version }}{% endraw %}.{{ ext }}" -C "artifacts/{{ exe_os }}-{{ exe_py }}" .{% else %}(cd "artifacts/{{ exe_os }}-{{ exe_py }}" && zip -r "../../{{ repo_name }}-{{ exe_os }}-{{ exe_py }}-v{% raw %}${{ needs.guard.outputs.version }}{% endraw %}.{{ ext }}" .){% endif %}{% raw %}
+{% endraw %}{% endfor %}{% endfor %}{% endif %}{% raw %}
       - name: Create GitHub Release
         uses: softprops/action-gh-release@{% endraw %}{{ gha_action_gh_release }}{% raw %}
         with:
           tag_name: v${{ needs.guard.outputs.version }}
           name: {% endraw %}{{ repo_name }}{% raw %} v${{ needs.guard.outputs.version }}
-          generate_release_notes: true{% endraw %}
+          generate_release_notes: true{% endraw %}{% if deploy_as_executable %}{% raw %}
+          fail_on_unmatched_files: true
+          files: |{% endraw %}{% set exe_os_list = [gha_linux_runner] + ([gha_windows_runner] if use_windows_in_exe_ci else []) %}{% for exe_os in exe_os_list %}{% for exe_py in python_ci_versions %}{% set ext = "tar" if exe_os == gha_linux_runner else "zip" %}
+            {{ repo_name }}-{{ exe_os }}-{{ exe_py }}-v{% raw %}${{ needs.guard.outputs.version }}{% endraw %}.{{ ext }}{% endfor %}{% endfor %}{% endif %}{% raw %}
+{% endraw %}
