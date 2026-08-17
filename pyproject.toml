@@ -21,7 +21,7 @@ dependencies = [
     "pytest-randomly>=4.1.0",
     "faker>=40.36.0",
     "pyrefly>=1.2.0",
-    "copier==9.17.0",
+    "copier==9.17.1",
     "copier-template-extensions==0.3.3"
 ]
 
