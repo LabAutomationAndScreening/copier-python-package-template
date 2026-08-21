@@ -303,8 +303,8 @@ repos:
         files: ^tests/.+\.py$
         exclude: |
           (?x)^(
-              .*/generated/graphql/.*|
-              .*/generated/open[-_]api/.*|
+              .*/generated/.*|
+              .*/generated/.*|
           )$
         # don't pass filenames else the command line sees them twice
         pass_filenames: false
