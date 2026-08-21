@@ -300,7 +300,7 @@ repos:
       - id: pyright-on-tests
         name: Run pyright on tests of the library # to mimic a downstream consumer of the library who uses pyright as their type checker, see https://pyrefly.org/blog/too-many-type-checkers/
         entry: bash -c "uv run pyright"
-        files: ^tests/.+\.py$
+        files: '.+\.py$'
         exclude: |
           (?x)^(
               .*/generated/.*|
