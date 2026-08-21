@@ -95,6 +95,6 @@
   "reportUnnecessaryTypeIgnoreComment": true,
   "reportMatchNotExhaustive": true,
   "reportImplicitOverride": true,
-  "reportUninitializedInstanceVariable": false, // doesn't apply to test code
+  "reportUninitializedInstanceVariable": false, // doesn't apply to test code.  Keep an eye on this to see if it causes any downstream problems of not catching real typing problems in the actual library code that cause problems in consumers...but it'd be a pain to set this to true for a test suite
   "pythonPlatform": "Linux"
 }
