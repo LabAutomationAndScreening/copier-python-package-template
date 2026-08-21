@@ -1,22 +1,15 @@
 {
+  // pyrefly is the type checker for src; pyright is a second checker run only on the test suite, per https://pyrefly.org/blog/too-many-type-checkers/
+  "include": ["tests"],
   "exclude": [
     // excludes managed by this repository
 
     // excludes managed by template
-    "**/node_modules",
-    "**/.precommit_cache",
-    "**/.ruff_cache",
-    "**/.npm_cache",
-    "**/.pipx_cache",
-    "**/__pycache__",
+    "**/generated",
     "**/vendor_files",
-    "**/generated/graphql",
-    "**/generated/open_api",
-    "**/.venv",
-    "**/venv",
-    "**/copier_template_resources",
-    "**/mutants",
-    "**/.claude/plugins"
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*"
   ],
   "strictListInference": true,
   "strictDictionaryInference": true,
