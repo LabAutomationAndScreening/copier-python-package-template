@@ -304,7 +304,6 @@ repos:
         exclude: |
           (?x)^(
               .*/generated/.*|
-              .*/generated/.*|
           )$
         # don't pass filenames else the command line sees them twice
         pass_filenames: false
