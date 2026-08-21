@@ -5,7 +5,7 @@
 # You are welcome to make changes to this file in your repo if they are custom to your project,
 # but if the change should be shared with other projects, please backport it to the template repo.
 # =====================================================================================================
-minimum_pre_commit_version: 4.3.0
+minimum_pre_commit_version: 4.5.1
 # run `pre-commit autoupdate --freeze` to update all hooks
 default_install_hook_types: [pre-commit, post-checkout]
 repos:
@@ -95,6 +95,7 @@ repos:
               .*generated/graphql.ts|
               .*/generated/open[-_]api/.*|
               .*/schema.graphql|
+              .*pyrightconfig\.json|
           )$
 
   - repo: https://github.com/rbubley/mirrors-prettier
@@ -151,6 +152,7 @@ repos:
               .devcontainer/devcontainer.json|
               .devcontainer/devcontainer-lock.json|
               .*devcontainer.json|
+              .*pyrightconfig\.json|
               .*tsconfig.json|
           )$
       - id: check-yaml
