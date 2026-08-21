@@ -5,6 +5,7 @@
     // excludes managed by this repository
 
     // excludes managed by template
+    "tests/unit/vcrpy_fixtures.py", // configures vcrpy, which is untyped, and imports nothing from the package under test
     "**/generated",
     "**/vendor_files",
     "**/node_modules",
