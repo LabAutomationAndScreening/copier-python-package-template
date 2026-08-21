@@ -62,6 +62,7 @@ class ContextUpdater(ContextHook):
         context["pytest_reserial_version"] = ">=0.6.1"
         context["python_faker_version"] = ">=40.36.0"
         context["mutmut_version"] = ">=3.7.0"
+        context["pyright_version"] = ">=1.1.411"
         context["pyrefly_version"] = ">=1.2.0"
         context["vacuum_openapi_version"] = "0.30.0"
 
