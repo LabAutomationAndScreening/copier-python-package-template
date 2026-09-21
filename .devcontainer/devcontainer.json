@@ -22,10 +22,10 @@
       "extensions": [
         // basic tooling
         // "eamodio.gitlens@15.5.1",
-        "coderabbit.coderabbit-vscode@0.21.7",
+        "coderabbit.coderabbit-vscode@0.21.8",
         "ms-vscode.live-server@0.5.2025051301",
         "MS-vsliveshare.vsliveshare@1.0.5905",
-        "anthropic.claude-code@2.1.273",
+        "anthropic.claude-code@2.1.278",
 
         // Python
         "-ms-python.vscode-pylance", // pyrefly is the language server for this project; ms-python.python auto-installs Pylance via its extension pack, and Pylance then warns on every boot that it's disabled
@@ -67,5 +67,5 @@
   "initializeCommand": "sh .devcontainer/initialize-command.sh",
   "onCreateCommand": "sh .devcontainer/on-create-command.sh",
   "postStartCommand": "sh .devcontainer/post-start-command.sh"
-  // Devcontainer context hash (do not manually edit this, it's managed by a pre-commit hook): 47e6d89e # spellchecker:disable-line
+  // Devcontainer context hash (do not manually edit this, it's managed by a pre-commit hook): 4d9b70d0 # spellchecker:disable-line
 }
