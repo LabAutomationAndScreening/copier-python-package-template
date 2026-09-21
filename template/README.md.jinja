@@ -23,6 +23,9 @@
 Documentation is hosted on [ReadTheDocs](https://{% endraw %}{{ package_name }}{% raw %}.readthedocs.io/en/latest/?badge=latest).
 
 # Development
+
+Multi-step workflows are defined as [Task](https://taskfile.dev) tasks. Run `task --list` to see them; the definitions live in `.config/taskfiles/`, and `Taskfile.yaml` in the repo root is only a shim that includes them.
+
 This project has a dev container. If you already have VS Code and Docker installed, you can click the badge above or [here](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url={% endraw %}{{ full_repo_url }}{% raw %}) to get started. Clicking these links will cause VS Code to automatically install the Dev Containers extension if needed, clone the source code into a container volume, and spin up a dev container for use.
 
 {% endraw %}{% if not deploy_as_executable %}{% raw %}To publish a new version of the repository, you can run the `Publish` workflow manually and publish to the staging registry from any branch, and you can check the 'Publish to Primary' option when on `main` to publish to the primary registry and create a git tag.
@@ -37,5 +40,4 @@ This project has a dev container. If you already have VS Code and Docker install
 
 
 ## Updating from the template
-This repository uses a copier template. To pull in the latest updates from the template, use the command:
-`copier update --answers-file .config/.copier-answers.yml --trust --conflict rej --defaults`{% endraw %}
+This repository uses a copier template. To pull in the latest updates from the template, run `task copier-update`{% endraw %}
