@@ -67,7 +67,13 @@ jobs:
     env:
       UV_PYTHON: ${{ matrix.python-version }}
 
-    steps:
+    steps:{% endraw %}{% if use_windows_in_ci %}
+      - name: Allow long file paths
+        if: runner.os == 'Windows'
+        # Some tooling (e.g. vcrpy, syrupy) generates file names past the 260 character limit Windows
+        # defaults to. This has to happen before the checkout that writes those files.
+        run: git config --global core.longpaths true
+{% endif %}{% raw %}
       - name: Checkout code
         uses: actions/checkout@{% endraw %}{{ gha_checkout }}{% raw %}
 
@@ -180,7 +186,13 @@ jobs:
     env:
       UV_PYTHON: ${{ matrix.python-version }}
 
-    steps:
+    steps:{% endraw %}{% if use_windows_in_ci %}
+      - name: Allow long file paths
+        if: runner.os == 'Windows'
+        # Some tooling (e.g. vcrpy, syrupy) generates file names past the 260 character limit Windows
+        # defaults to. This has to happen before the checkout that writes those files.
+        run: git config --global core.longpaths true
+{% endif %}{% raw %}
       - name: Checkout code
         uses: actions/checkout@{% endraw %}{{ gha_checkout }}{% raw %}
       - name: Setup python
@@ -326,7 +338,13 @@ jobs:
     env:
       UV_PYTHON: ${{ matrix.python-version }}
 
-    steps:
+    steps:{% endraw %}{% if use_windows_in_ci %}
+      - name: Allow long file paths
+        if: runner.os == 'Windows'
+        # Some tooling (e.g. vcrpy, syrupy) generates file names past the 260 character limit Windows
+        # defaults to. This has to happen before the checkout that writes those files.
+        run: git config --global core.longpaths true
+{% endif %}{% raw %}
       - name: Checkout code
         uses: actions/checkout@{% endraw %}{{ gha_checkout }}{% raw %}
       - name: Setup python
