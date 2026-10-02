@@ -19,8 +19,8 @@ class ContextUpdater(ContextHook):
     def hook(  # noqa: PLR0915 # yes, this is a lot of statements, but it's all just creating the dict
         self, context: dict[Any, Any]
     ) -> dict[Any, Any]:
-        context["uv_version"] = "0.12.15"
-        context["pnpm_version"] = "12.4.2"
+        context["uv_version"] = "0.12.21"
+        context["pnpm_version"] = "12.8.1"
         context["npm_version"] = "11.13.0"
         context["nvm_version"] = "0.40.5"
         context["pre_commit_version"] = "==4.6.2"
@@ -45,10 +45,10 @@ class ContextUpdater(ContextHook):
         context["pyinstaller_version"] = ">=6.22.3"
         context["setuptools_version"] = "80.7.1"
         context["strawberry_graphql_version"] = "==0.298.0"
-        context["fastapi_version"] = ">=0.141.1"
+        context["fastapi_version"] = ">=0.142.2"
         context["fastapi_offline_version"] = ">=1.7.7"
         context["starlette_version"] = ">=1.7.0"
-        context["uvicorn_version"] = ">=0.53.0"
+        context["uvicorn_version"] = ">=0.54.0"
         context["lab_auto_pulumi_version"] = ">=0.3.0"
         context["ariadne_codegen_version"] = ">=0.18.0"
         context["pytest_mock_version"] = ">=3.16.0"
@@ -63,7 +63,7 @@ class ContextUpdater(ContextHook):
         context["pytest_asyncio_version"] = ">=1.4.0"
         context["pytest_timeout_version"] = ">=2.4.0"
         context["pytest_reserial_version"] = ">=0.6.1"
-        context["python_faker_version"] = ">=40.39.0"
+        context["python_faker_version"] = ">=40.40.0"
         context["mutmut_version"] = ">=3.8.0"
         context["pyright_version"] = ">=1.1.414"
         context["pyrefly_version"] = ">=1.3.2"
