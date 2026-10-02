@@ -89,6 +89,7 @@
         ".github/zizmor.yml",
         ".gitignore",
         ".pre-commit-config.yaml",
+        ".prekignore",
         ".python-version",
         "AGENTS.md",
         "CHANGELOG.md",

@@ -17,7 +17,7 @@ npm --prefix "$repo_root/.claude" ci
 # Install beads for use in Claude planning
 npm install -g @beads/bd@1.2.2 # kept in lockstep with dolt_image_version; both are defined in extensions/context.py
 
-pre-commit install --install-hooks
+prek install --force --prepare-hooks
 
 python .devcontainer/manual-setup-deps.py --optionally-check-lock --allow-uv-to-install-python
 
