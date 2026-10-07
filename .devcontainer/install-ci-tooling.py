@@ -14,8 +14,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-UV_VERSION = "0.12.21"
-PNPM_VERSION = "12.8.1"
+UV_VERSION = "0.12.23"
+PNPM_VERSION = "12.9.1"
 COPIER_VERSION = "==9.18.2"
 COPIER_TEMPLATE_EXTENSIONS_VERSION = "==0.3.3"
 PRE_COMMIT_VERSION = "==4.6.2"
@@ -283,19 +283,17 @@ def main():
             env=uv_env,
             timeout=DOWNLOAD_TIMEOUT_SECONDS,
         )
-        # CI still runs hooks through pre-commit, so prek is only needed in devcontainers for now
-        if os.environ.get("CI") != "true":
-            _ = subprocess.run(  # noqa: S603 # this is all our own input
-                [
-                    uv_path,
-                    "tool",
-                    "install",
-                    f"prek{PREK_VERSION}",
-                ],
-                check=True,
-                env=uv_env,
-                timeout=DOWNLOAD_TIMEOUT_SECONDS,
-            )
+        _ = subprocess.run(  # noqa: S603 # this is all our own input
+            [
+                uv_path,
+                "tool",
+                "install",
+                f"prek{PREK_VERSION}",
+            ],
+            check=True,
+            env=uv_env,
+            timeout=DOWNLOAD_TIMEOUT_SECONDS,
+        )
     if not args.no_node:
         run_node_cmds(["npm -v", f"npm install -g pnpm@{PNPM_VERSION}", "pnpm -v"], is_windows=is_windows)
     # Task is installed outside the --no-node branch because CI always passes --no-node (pnpm/setup handles pnpm there), and every job still needs the task runner
