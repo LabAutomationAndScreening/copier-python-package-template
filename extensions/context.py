@@ -27,6 +27,7 @@ class ContextUpdater(ContextHook):
         context["identify_version"] = "==2.6.20"
         context["prek_version"] = "==0.5.5"
         context["task_version"] = "==3.53.1"
+        context["biome_version"] = "2.5.15"
         context["pytest_version"] = ">=9.1.1"
         context["pytest_randomly_version"] = ">=5.0.0"
         context["pytest_cov_version"] = ">=7.1.0"
