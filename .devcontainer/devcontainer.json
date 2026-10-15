@@ -14,7 +14,7 @@
       "autoPull": false
     },
     // https://github.com/anthropics/devcontainer-features/blob/main/src/claude-code/devcontainer-feature.json
-    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0.5": {},
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0.5": {}
   },
   "customizations": {
     "vscode": {
@@ -22,7 +22,7 @@
       "extensions": [
         // basic tooling
         // "eamodio.gitlens@15.5.1",
-        "coderabbit.coderabbit-vscode@0.21.9",
+        "coderabbit.coderabbit-vscode@0.23.0",
         "ms-vscode.live-server@0.5.2025051301",
         "MS-vsliveshare.vsliveshare@1.0.5905",
         "anthropic.claude-code@2.1.283",
@@ -39,7 +39,7 @@
         "samuelcolvin.jinjahtml@0.20.0",
         "tamasfe.even-better-toml@0.19.2",
         "emilast.LogFileHighlighter@3.3.3",
-        "esbenp.prettier-vscode@12.4.0"
+        "biomejs.biome@2026.8.190716"
       ],
       "settings": {
         "editor.accessibilitySupport": "off", // turn off sounds
@@ -56,13 +56,13 @@
         // TODO: see if there's a way to specify different configurations for different folders
         "ruff.configuration": "/workspaces/copier-python-package-template/.config/ruff-non-src.toml", // use the non-src configuration since it's less restrictive and won't show false positives and underline things
         "python.pyrefly.configPath": "/workspaces/copier-python-package-template/.config/pyrefly.toml",
-        "prettier.configPath": "/workspaces/copier-python-package-template/.config/.prettierrc",
-        "[jsonc][json][javascript][typescript][graphql][css][scss][html][vue]": {
-          "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "biome.configurationPath": "/workspaces/copier-python-package-template/.config/biome.jsonc",
+        "[jsonc][json][javascript][typescript][graphql][css]": {
+          "editor.defaultFormatter": "biomejs.biome",
           "editor.formatOnSave": true
         }
       }
-    },
+    }
   },
   "initializeCommand": "sh .devcontainer/initialize-command.sh",
   "onCreateCommand": "sh .devcontainer/on-create-command.sh",

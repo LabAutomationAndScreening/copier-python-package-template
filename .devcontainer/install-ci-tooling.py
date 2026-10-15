@@ -25,6 +25,7 @@ PRE_COMMIT_VERSION = "==4.6.2"
 IDENTIFY_VERSION = "==2.6.20"
 PREK_VERSION = "==0.5.5"
 TASK_VERSION = "==3.53.1"
+BIOME_VERSION = "2.5.15"
 DOWNLOAD_TIMEOUT_SECONDS = 90
 # CI runners regularly see transient network failures (connection resets, DNS blips, registry 5xx), so every step that
 # touches the network is retried with exponential backoff before the job is failed.
@@ -79,6 +80,27 @@ _ = parser.add_argument(
     default=False,
     help="Skip installing the SSM plugin for AWS CLI",
 )
+_ = parser.add_argument(
+    "--install-pre-commit-tooling",
+    action="store_true",
+    default=False,
+    help="Install pre-commit, identify, prek and Biome in CI. Outside CI, this script always installs them.",
+)
+_ = parser.add_argument(
+    "--install-copier",
+    action="store_true",
+    default=False,
+    help="Install copier in CI. Outside CI, this script always installs it.",
+)
+
+
+def should_install(*, requested: bool) -> bool:
+    if requested:
+        return True
+    # GitHub Actions always sets CI, so its absence means a developer's machine or devcontainer, which gets every tool
+    if "CI" not in os.environ:
+        return True
+    return False
 
 
 def pwsh_cmd(cmd: str) -> list[str]:
@@ -211,6 +233,34 @@ def install_task(*, uv_path: str, uv_env: dict[str, str], is_windows: bool) -> N
     if "GITHUB_PATH" in os.environ:
         with Path(os.environ["GITHUB_PATH"]).open("a", encoding="utf-8") as github_path_file:
             _ = github_path_file.write(f"{LOCAL_BIN_DIR}\n")
+
+
+def install_biome(*, is_windows: bool) -> None:
+    """Install the pinned Biome globally through npm.
+
+    The Biome pre-commit hooks are `language: system` hooks that run this install, and the VS Code extension finds it in
+    the global npm root, so the hooks and the editor always use the same version. When node comes from `pnpm/setup` in
+    CI, npm's global bin directory is not on PATH (see `install_task`), so it is appended to `GITHUB_PATH`.
+    """
+    run_with_retries(  # noqa: S604 # we need shell=True for npm commands, and this is all our own input
+        node_cmd(f"npm install -g @biomejs/biome@{BIOME_VERSION}", is_windows=is_windows),
+        description="Installing Biome",
+        shell=True,
+    )
+    npm_prefix = subprocess.run(  # noqa: S602 # we need shell=True for npm commands, and this is all our own input
+        node_cmd("npm prefix -g", is_windows=is_windows), shell=True, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    # npm links global executables straight into its prefix on Windows, and into the prefix's bin directory elsewhere
+    if is_windows:
+        global_bin_dir = Path(npm_prefix)
+    else:
+        global_bin_dir = Path(npm_prefix) / "bin"
+    biome_env = dict(os.environ)
+    biome_env["PATH"] = f"{global_bin_dir}{os.pathsep}{biome_env['PATH']}"
+    _ = subprocess.run(node_cmd("biome --version", is_windows=is_windows), shell=True, check=True, env=biome_env)  # noqa: S602 # we need shell=True for npm-installed commands, and this is all our own input
+    if "GITHUB_PATH" in os.environ:
+        with Path(os.environ["GITHUB_PATH"]).open("a", encoding="utf-8") as github_path_file:
+            _ = github_path_file.write(f"{global_bin_dir}\n")
 
 
 def node_cmd(cmd: str, *, is_windows: bool) -> list[str]:
@@ -358,41 +408,46 @@ def main():
     else:
         uv_path = "uv"
     install_uv(uv_path=uv_path, uv_env=uv_env, is_windows=is_windows)
+    install_pre_commit_tooling = should_install(requested=args.install_pre_commit_tooling)
     if not args.no_python:
-        run_with_retries(
-            [
-                uv_path,
-                "tool",
-                "install",
-                f"copier{COPIER_VERSION}",
-                "--with",
-                f"copier-template-extensions{COPIER_TEMPLATE_EXTENSIONS_VERSION}",
-            ],
-            description="Installing copier",
-            env=uv_env,
-        )
-        run_with_retries(
-            [
-                uv_path,
-                "tool",
-                "install",
-                f"pre-commit{PRE_COMMIT_VERSION}",
-                "--with",
-                f"identify{IDENTIFY_VERSION}",
-            ],
-            description="Installing pre-commit",
-            env=uv_env,
-        )
-        run_with_retries(
-            [
-                uv_path,
-                "tool",
-                "install",
-                f"prek{PREK_VERSION}",
-            ],
-            description="Installing prek",
-            env=uv_env,
-        )
+        if should_install(requested=args.install_copier):
+            run_with_retries(
+                [
+                    uv_path,
+                    "tool",
+                    "install",
+                    f"copier{COPIER_VERSION}",
+                    "--with",
+                    f"copier-template-extensions{COPIER_TEMPLATE_EXTENSIONS_VERSION}",
+                ],
+                description="Installing copier",
+                env=uv_env,
+            )
+        if install_pre_commit_tooling:
+            run_with_retries(
+                [
+                    uv_path,
+                    "tool",
+                    "install",
+                    f"pre-commit{PRE_COMMIT_VERSION}",
+                    "--with",
+                    f"identify{IDENTIFY_VERSION}",
+                ],
+                description="Installing pre-commit",
+                env=uv_env,
+            )
+            run_with_retries(
+                [
+                    uv_path,
+                    "tool",
+                    "install",
+                    f"prek{PREK_VERSION}",
+                ],
+                description="Installing prek",
+                env=uv_env,
+            )
+    if install_pre_commit_tooling:
+        install_biome(is_windows=is_windows)
     if not args.no_node:
         install_pnpm(is_windows=is_windows)
     # Task is installed outside the --no-node branch because CI always passes --no-node (pnpm/setup handles pnpm there), and every job still needs the task runner
