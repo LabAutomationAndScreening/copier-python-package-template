@@ -19,7 +19,7 @@ class ContextUpdater(ContextHook):
     def hook(  # noqa: PLR0915 # yes, this is a lot of statements, but it's all just creating the dict
         self, context: dict[Any, Any]
     ) -> dict[Any, Any]:
-        context["uv_version"] = "0.12.23"
+        context["uv_version"] = "0.13.4"
         context["pnpm_version"] = "12.9.1"
         context["npm_version"] = "11.13.0"
         context["nvm_version"] = "0.40.5"
@@ -38,7 +38,7 @@ class ContextUpdater(ContextHook):
         context["pulumi_aws_version"] = ">=7.48.0"
         context["pulumi_aws_native_version"] = ">=1.81.0"
         context["pulumi_command_version"] = ">=1.2.1"
-        context["pulumi_github_version"] = ">=6.14.0"
+        context["pulumi_github_version"] = ">=6.15.0"
         context["pulumi_okta_version"] = ">=6.6.0"
         context["boto3_version"] = ">=1.43.88"
         context["ephemeral_pulumi_deploy_version"] = ">=0.0.8"
@@ -51,7 +51,7 @@ class ContextUpdater(ContextHook):
         context["fastapi_offline_version"] = ">=1.7.7"
         context["starlette_version"] = ">=1.7.0"
         context["uvicorn_version"] = ">=0.54.0"
-        context["lab_auto_pulumi_version"] = ">=0.3.0"
+        context["lab_auto_pulumi_version"] = ">=0.7.0"
         context["ariadne_codegen_version"] = ">=0.18.0"
         context["pytest_mock_version"] = ">=3.16.0"
         context["uuid_utils_version"] = ">=1.0.0"
@@ -68,10 +68,10 @@ class ContextUpdater(ContextHook):
         context["python_faker_version"] = ">=40.41.0"
         context["mutmut_version"] = ">=3.8.0"
         context["pyright_version"] = ">=1.1.414"
-        context["pyrefly_version"] = ">=1.3.2"
+        context["pyrefly_version"] = "==1.4.0"
         context["vacuum_openapi_version"] = "0.30.0"
 
-        context["default_node_version"] = "24.11.1"
+        context["default_node_version"] = "24.22.1"
         context["nuxt_ui_version"] = "^4.10.0"
         context["nuxt_version"] = "^4.4.6"
         context["nuxt_icon_version"] = "^2.2.1"
@@ -123,6 +123,7 @@ class ContextUpdater(ContextHook):
         context["gha_action_gh_release"] = "v3.0.3"
         context["gha_codecov"] = "v7.1.0"
         context["gha_mutex"] = "1ebad517141198e08d47cf72f3c0975316620a65 # v1.0.0-alpha.10"
+        context["gha_paths_filter"] = "ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3"
         context["gha_pypi_publish"] = "v1.14.2"
         context["gha_sleep"] = "v2.0.4"
         context["gha_absaoss_k3d"] = "v2.4.0"
