@@ -1,0 +1,21 @@
+# ============== WARNING ==============================================================================
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-base-template.git
+# See .config/.copier-managed-files.json for details.
+#
+# You are welcome to make changes to this file in your repo if they are custom to your project,
+# but if the change should be shared with other projects, please backport it to the template repo.
+# =====================================================================================================
+name: Confirm Git Tree Clean
+description: 'Fail when the job has left a changed or untracked file behind, such as a stale lock file, drifted codegen, or test or build output missing from .gitignore. Run it as the last step of any job that installs, generates, tests or builds.'
+
+runs:
+  using: composite
+  steps:
+    - name: Confirm the git tree is still clean
+      run: |
+        status="$(git status --porcelain)"
+        if [ -n "$status" ]; then
+          echo "$status"
+          exit 1
+        fi
+      shell: bash
