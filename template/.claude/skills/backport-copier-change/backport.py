@@ -1268,18 +1268,17 @@ class _PrReviews:
         self.head_first_seen_at = 0.0
 
     def probe(self) -> dict[str, Any] | None:
-        # the PR's verdict once every reviewer has one on its current head, else None to keep waiting
+        # the PR's verdict once every reviewer has one on its current head, else None to keep waiting. Every verdict is
+        # worked out afresh: on the same head, a review asked for again can start, finish or add findings
         state = _pr_review_state(repo=self.repo, pr=self.pr, reviewers=self.reviewers)
         if state["head"] != self.head:
-            self.verdicts.clear()
             self.head = state["head"]
             self.head_first_seen_at = time.time()
         state["head_first_seen_at"] = self.head_first_seen_at
         self.latest.update(state["bodies"])
         self.comments = state["comments"]
+        self.verdicts = {}
         for reviewer in self.reviewers:
-            if reviewer.NAME in self.verdicts:
-                continue
             result = _reviewer_verdict(
                 reviewer=reviewer, state=state, repo=self.repo, pr=self.pr, checkout=self.checkout
             )
@@ -1317,15 +1316,17 @@ def _chain_prs(*, chain: dict[str, Any], branch: str) -> list[tuple[str, str | N
 
 
 _QUIET_VERDICTS = frozenset({"clean", "settled"})
+_UNREVIEWED_VERDICTS = frozenset({"head_not_reviewed", "skipped"})
 
 
 def _watched_pr(*, reviews: _PrReviews, result: dict[str, Any] | None, settled: set[str]) -> dict[str, Any]:
     """Sort one PR into what review-watch does about it: wait, leave it, or stop for the agent.
 
     `waiting`: a reviewer is still reviewing the head, or hasn't started yet. `quiet`: clean, settled, or a head the
-    agent already settled (--settled). `held`: unreviewed, but a reviewer's own note says when its next review is
-    available, which `until` gives. `needs_action`: anything else, such as a finding, a review nobody can read, or a
-    head left unreviewed with no time for its next review (including one whose time has come).
+    agent already settled (--settled). `held`: every reviewer that isn't quiet left the head unreviewed, and each one's
+    own note says when its next review is available; `until` is the soonest. `needs_action`: anything else, such as a
+    finding, a review nobody can read, or an unreviewed head with no time for its next review (including one whose
+    time has come), so a finding is never held behind another reviewer's countdown.
     """
     entry: dict[str, Any] = {"pr": reviews.pr, "head": reviews.head}
     if result is None:
@@ -1335,11 +1336,26 @@ def _watched_pr(*, reviews: _PrReviews, result: dict[str, Any] | None, settled: 
         return {**entry, "state": "quiet"}
     if result["verdict"] in _QUIET_VERDICTS:
         return {**entry, "state": "quiet"}
-    times = [r.allowance_returns_at(reviews.comments[r.NAME]) for r in reviews.reviewers]
-    future = sorted(t for t in times if t is not None)
-    if future:
-        return {**entry, "state": "held", "until": future[0].isoformat()}
-    return {**entry, "state": "needs_action"}
+    until = _held_until(reviews=reviews, verdicts=result["reviewers"])
+    if until is None:
+        return {**entry, "state": "needs_action"}
+    return {**entry, "state": "held", "until": until.isoformat()}
+
+
+def _held_until(*, reviews: _PrReviews, verdicts: dict[str, dict[str, Any]]) -> datetime.datetime | None:
+    # the soonest time a held-back reviewer's next review is due, or None when any reviewer needs the agent now
+    times: list[datetime.datetime] = []
+    for reviewer in reviews.reviewers:
+        verdict = verdicts[reviewer.NAME]["verdict"]
+        if verdict in _QUIET_VERDICTS:
+            continue
+        if verdict not in _UNREVIEWED_VERDICTS:
+            return None
+        available_at = reviewer.allowance_returns_at(reviews.comments[reviewer.NAME])
+        if available_at is None:
+            return None
+        times.append(available_at)
+    return min(times)
 
 
 def _chain_reviews(*, a: argparse.Namespace) -> tuple[list[_PrReviews], list[str]]:
