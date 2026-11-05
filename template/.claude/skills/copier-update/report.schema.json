@@ -103,6 +103,49 @@
             },
             "required": ["needs_review"]
           }
+        },
+        {
+          "description": "A rejected hunk still pending must be flagged for review.",
+          "if": {
+            "properties": {
+              "rej_file": {
+                "properties": {
+                  "disposition": {
+                    "const": "pending"
+                  }
+                },
+                "required": ["disposition"]
+              }
+            },
+            "required": ["rej_file"]
+          },
+          "then": {
+            "properties": {
+              "needs_review": {
+                "const": true
+              }
+            },
+            "required": ["needs_review"]
+          }
+        },
+        {
+          "description": "Retained conflict markers must be flagged for review.",
+          "if": {
+            "properties": {
+              "conflict_markers_retained": {
+                "const": true
+              }
+            },
+            "required": ["conflict_markers_retained"]
+          },
+          "then": {
+            "properties": {
+              "needs_review": {
+                "const": true
+              }
+            },
+            "required": ["needs_review"]
+          }
         }
       ],
       "description": "How the conflicts in one file were resolved.",
@@ -344,6 +387,23 @@
   ],
   "description": "A record of how conflicts were resolved during a `copier update` (or a plain git merge/rebase). One report covers a single update and contains one entry per conflicted file.",
   "properties": {
+    "commits": {
+      "description": "The commits this update made on top of project_commit, newest first: the update commit and any fix commits. `report` fills it in from git when the draft leaves it out.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "sha": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": ["sha", "subject"],
+        "type": "object"
+      },
+      "type": "array"
+    },
     "copier": {
       "$ref": "#/$defs/copierUpdate",
       "description": "Template identity and the version range this update spans. Required when operation is copier-update or copier-recopy."

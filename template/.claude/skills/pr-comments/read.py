@@ -136,9 +136,11 @@ def fetch_current_user_login() -> str:
 
 
 _BOT_LOGINS = frozenset({"coderabbitai[bot]", "copilot-pull-request-reviewer[bot]", "Copilot"})
-# The sections in which CodeRabbit lists findings in a review's body, with no inline thread to hold them
+# The sections in which CodeRabbit lists findings in a review's body, with no inline thread to hold them; a heading
+# with a count of zero lists none
 _REVIEW_BODY_FINDINGS_RE = re.compile(
-    r"Follow-ups \(\d+\)|Nitpick comments \(\d+\)|Outside diff range comments \(\d+\)|Additional comments: \d+"
+    r"Follow-ups \([1-9]\d*\)|Nitpick comments \([1-9]\d*\)"
+    r"|Outside diff range comments \([1-9]\d*\)|Additional comments: [1-9]\d*"
 )
 
 
@@ -348,7 +350,12 @@ def _all_pulls_threads(pulls_raw: list[dict[str, Any]], resolved_urls: set[str])
 def _marked_replies(
     issues_raw: list[dict[str, Any]], *, current_user: str, parse_marker: Callable[[str], int | None]
 ) -> dict[int, list[dict[str, Any]]]:
-    """Map each answered id to the current user's top-level comments whose marker names it, oldest first."""
+    """Map each answered id to the current user's top-level comments whose marker names it, oldest first.
+
+    GitHub has no threads for top-level comments, so a reply to one (or to a review body) is a top-level comment
+    carrying a marker with the answered id. `parse_marker` reads that id from a comment's body, or returns None for
+    a comment without the marker; such comments, and every other user's, are left out.
+    """
     replies: dict[int, list[dict[str, Any]]] = {}
     for c in issues_raw:
         if _login_from_comment(c) != current_user:

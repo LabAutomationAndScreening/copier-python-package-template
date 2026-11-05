@@ -28,8 +28,8 @@ Verbs (all print JSON on stdout; errors go to stderr with exit 1):
                                     change, and whether the newest tag lacks a pin taken from the
                                     parent's branch
   push --chain F [--checkout DIR]   push the branch and print its full head SHA; for a public repo,
-                                    first refuse any unpushed commit whose message names a private
-                                    repo from the chain
+                                    first refuse any unpushed commit whose message or changes name a
+                                    private repo from the chain
   net-diff [--checkout DIR]         drop copier's staged-then-reversed changes, list the net
                                     change against HEAD, and say whether only `_commit` moved
   scan --chain F --repo R --file T  private repo names from the chain that text T would leak
@@ -42,7 +42,7 @@ Verbs (all print JSON on stdout; errors go to stderr with exit 1):
   ci --repo OWNER/NAME --sha SHA     wait for every push and pull_request CI run on SHA, then for
                                     every one of their jobs to report completed, and list each
                                     job's conclusion, and any job that never started, with
-                                    GitHub's reason
+                                    GitHub's reason, and any run that failed before creating a job
   ai-review --repo R --pr N         wait for every AI reviewer the repo configures (one module
                                     per reviewer in ai_reviewers/) to give its verdict on the
                                     PR's latest commit: clean, flagged or skipped, settled when
@@ -63,11 +63,12 @@ Verbs (all print JSON on stdout; errors go to stderr with exit 1):
   delete-branch --repo R --branch B --checkout DIR --chain F --downstream DIR ...
                                     delete a template repo's merged branch, on GitHub and locally,
                                     once every repo generated from it records no commit only it holds
-  update-branch --checkout DIR --branch B [--finish]
+  update-branch --checkout DIR --branch B --chain F [--finish]
                                     merge the default branch into the feature branch when it is
                                     checked out there and clean, and push; on a conflict, leave
                                     the merge for the agent to resolve, then --finish commits
-                                    and pushes once nothing is unmerged or marked
+                                    and pushes once nothing is unmerged or marked; for a public
+                                    repo, first refuse as push does
   cleanup --worktree DIR            remove a clean, fully pushed worktree
 
 No verb opens, marks ready or merges a PR. Whether an agent may do those is decided by the permission
@@ -103,6 +104,8 @@ ANSWERS = Path(".config/.copier-answers.yml")
 
 
 MAX_CONSECUTIVE_FAILURES = 5
+# long enough for `checkout`'s clone, uv sync and npm ci; a hung gh or git call otherwise outlives every wait's deadline
+SUBPROCESS_TIMEOUT_SECONDS = 900
 TRANSIENT = re.compile(r"HTTP 5\d\d|connection reset|timed out|TLS handshake|EOF", re.IGNORECASE)
 
 
@@ -118,7 +121,13 @@ def _attempt(*, cmd: list[str], cwd: Path | None = None) -> subprocess.Completed
     env = dict(os.environ)
     _ = env.pop("GITHUB_TOKEN", None)
     _ = env.pop("GH_TOKEN", None)
-    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, env=env, check=False)  # noqa: S603 # argv lists, never a shell; the variable parts come from this script's own CLI arguments
+    try:
+        return subprocess.run(  # noqa: S603 # argv lists, never a shell; the variable parts come from this script's own CLI arguments
+            cmd, cwd=cwd, capture_output=True, text=True, env=env, check=False, timeout=SUBPROCESS_TIMEOUT_SECONDS
+        )
+    except subprocess.TimeoutExpired as e:
+        # transient, so a wait counts it as one failed check and tries again
+        raise TransientError(f"{' '.join(cmd)} timed out after {SUBPROCESS_TIMEOUT_SECONDS}s") from e
 
 
 def _run(*, cmd: list[str], cwd: Path | None = None) -> str:
@@ -161,6 +170,8 @@ def _answers_commit(repo: Path) -> str | None:
 SEARCH_ATTEMPTS = 3
 # GitHub's code search allows a few requests a minute, and the limit resets each minute
 SEARCH_LIMIT_RESET_SECONDS = 61
+# one page of code search hits; a template has a few dozen consumers, and more pages would spend that rate limit
+CODE_SEARCH_LIMIT = 100
 
 
 def _gh_search(*args: str) -> Any:  # noqa: ANN401 # gh's JSON output has a different shape per command
@@ -186,8 +197,13 @@ def _src_paths(*, query: str, extra: list[str]) -> list[dict[str, Any]]:
         "--json",
         "repository,path,textMatches",
         "--limit",
-        "100",
+        str(CODE_SEARCH_LIMIT),
     )
+    if len(hits) >= CODE_SEARCH_LIMIT:
+        raise FailError(
+            f"code search for {query!r} returned {CODE_SEARCH_LIMIT} hits, its limit here, so the list of repos"
+            " generated from the template may be incomplete"
+        )
     return [
         {
             "repo": hit["repository"]["nameWithOwner"],
@@ -551,13 +567,55 @@ def _catch_up_pull_points(parent: Path) -> list[dict[str, str]]:
     return points
 
 
-def _leaking_commits(*, checkout: Path, since: str, repo: str, chain: dict[str, Any]) -> list[str]:
+def _added_text(*, checkout: Path, sha: str) -> str:
+    """Return the paths a commit touches and the lines it adds, the part of its diff a push publishes anew.
+
+    A merge commit's combined diff heads each file with `diff --cc <path>` instead, and for a binary file that header
+    is the only place its path appears.
+    """
+    diff = _git("show", "--format=", "--no-color", "--no-ext-diff", "-M", "--unified=0", sha, cwd=checkout)
+    added: list[str] = []
+    for line in diff.splitlines():
+        if line.startswith(("diff --git ", "diff --cc ", "rename to ")):
+            added.append(line)
+            continue
+        if line.startswith("+"):
+            added.append(line[1:])
+    return "\n".join(added)
+
+
+def _leaking_commits(*, checkout: Path, pushed: list[str], repo: str, chain: dict[str, Any]) -> list[str]:
     leaks: list[str] = []
-    for sha in _git("rev-list", f"{since}..HEAD", cwd=checkout).split():
-        hits = scan_text(text=_git("log", "-1", "--format=%B", sha, cwd=checkout), repo=repo, chain=chain)
-        if hits:
-            leaks.append(f"{sha[:12]}: {', '.join(hits)}")
+    for sha in _git("rev-list", "HEAD", *[f"^{ref}" for ref in pushed], cwd=checkout).split():
+        in_message = scan_text(text=_git("log", "-1", "--format=%B", sha, cwd=checkout), repo=repo, chain=chain)
+        in_changes = scan_text(text=_added_text(checkout=checkout, sha=sha), repo=repo, chain=chain)
+        if in_message:
+            leaks.append(f"{sha[:12]} message: {', '.join(in_message)}")
+        if in_changes:
+            leaks.append(f"{sha[:12]} changes: {', '.join(in_changes)}")
     return leaks
+
+
+def _require_no_leaks(*, checkout: Path, branch: str, default: str, chain_file: str) -> None:
+    """Refuse a push of `branch` that would publish a private repo's name.
+
+    Only what the push adds is scanned: the commits on HEAD that neither origin's default branch nor origin's copy of
+    `branch` holds. After a merge of the default branch, that is the branch's unpushed commits and the merge commit
+    itself, not the default branch's own history.
+    """
+    pushed = [f"origin/{default}"]
+    if _has_ref(checkout=checkout, ref=f"refs/remotes/origin/{branch}"):
+        pushed.append(f"origin/{branch}")
+    repo = _repo_slug(_git("remote", "get-url", "origin", cwd=checkout).strip())
+    leaks = _leaking_commits(
+        checkout=checkout, pushed=pushed, repo=repo, chain=json.loads(Path(chain_file).read_text())
+    )
+    if leaks:
+        raise FailError(
+            f"{repo} is public and these unpushed commits name a private repo in their message or changes; nothing was "
+            "pushed. Reword or edit them (they are not on GitHub yet, so rewriting them is safe), then push again:\n"
+            + "\n".join(leaks)
+        )
 
 
 def cmd_push(a: argparse.Namespace) -> dict[str, Any]:
@@ -566,16 +624,7 @@ def cmd_push(a: argparse.Namespace) -> dict[str, Any]:
     default = _default_branch(checkout)
     if branch == default:
         raise FailError(f"refusing to push the default branch {branch}")
-    since = f"origin/{default}"
-    if _has_ref(checkout=checkout, ref=f"refs/remotes/origin/{branch}"):
-        since = f"origin/{branch}"
-    repo = _repo_slug(_git("remote", "get-url", "origin", cwd=checkout).strip())
-    leaks = _leaking_commits(checkout=checkout, since=since, repo=repo, chain=json.loads(Path(a.chain).read_text()))
-    if leaks:
-        raise FailError(
-            f"{repo} is public and these unpushed commit messages name a private repo; nothing was pushed. Reword "
-            "them (they are not on GitHub yet, so rewriting them is safe), then push again:\n" + "\n".join(leaks)
-        )
+    _require_no_leaks(checkout=checkout, branch=branch, default=default, chain_file=a.chain)
     _ = _git("push", "-u", "origin", branch, cwd=checkout)
     return {"branch": branch, "sha": _git("rev-parse", "HEAD", cwd=checkout).strip()}
 
@@ -820,14 +869,14 @@ def _wait[T](*, timeout: int, interval: int, what: str, probe: Callable[[], T | 
                 raise FailError(
                     f"{MAX_CONSECUTIVE_FAILURES} failed checks in a row while waiting for {what}: {e}"
                 ) from e
-            time.sleep(interval)
-            continue
-        failures = 0
-        if result is not None:
-            return result
-        if time.monotonic() > deadline:
+        else:
+            failures = 0
+            if result is not None:
+                return result
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
             raise FailError(f"timed out after {timeout}s waiting for {what}")
-        time.sleep(interval)
+        time.sleep(min(interval, remaining))
 
 
 CI_EVENTS = {"push", "pull_request", "pull_request_target"}
@@ -843,10 +892,16 @@ def cmd_ci(a: argparse.Namespace) -> dict[str, Any]:
     than guess which events will run, this takes every push and pull_request run that appears for the commit, and
     judges by all of them together.
     """
+    # gh filters runs by commit only on the full SHA
+    if re.fullmatch(r"[0-9a-f]{40}", a.sha) is None:
+        raise FailError(f"--sha must be a full 40-character commit SHA, such as push prints, not {a.sha!r}")
 
     def find_runs() -> list[int] | None:
-        runs = _gh_json("run", "list", "--repo", a.repo, "--limit", "50", "--json", "databaseId,headSha,event")
-        ids = [r["databaseId"] for r in runs if r["headSha"].startswith(a.sha) and r["event"] in CI_EVENTS]
+        # filtered by GitHub, so no run for the commit can scroll out of a page of the repo's newest runs
+        runs = _gh_json(
+            "run", "list", "--repo", a.repo, "--commit", a.sha, "--limit", "100", "--json", "databaseId,event"
+        )
+        ids = [r["databaseId"] for r in runs if r["event"] in CI_EVENTS]
         return ids or None
 
     run_ids = _wait(timeout=600, interval=15, what=f"a CI run for {a.sha}", probe=find_runs)
@@ -886,18 +941,37 @@ def cmd_ci(a: argparse.Namespace) -> dict[str, Any]:
         for run_id in run_ids:
             reasons.update(_failure_annotations(repo=a.repo, run_id=run_id))
     failed = [j["name"] for j in jobs if j["conclusion"] not in {"success", "skipped"} and j["name"] not in not_started]
+    failed_runs = _jobless_failed_runs(views)
     return {
         "events": sorted({v["event"] for v in views}),
         "runs": [
             {"id": run_id, "event": v["event"], "url": v["url"], "conclusion": v["conclusion"]}
             for run_id, v in zip(run_ids, views, strict=True)
         ],
-        "passed": not failed and not not_started,
+        "passed": not failed and not not_started and not failed_runs,
         "failed_jobs": failed,
+        "failed_runs": failed_runs,
         "not_started_jobs": not_started,
         "not_started_reasons": sorted(reasons),
         "jobs": jobs,
     }
+
+
+def _jobless_failed_runs(views: list[dict[str, Any]]) -> list[str]:
+    """List the URL of each run that failed before creating a single job, such as one with an invalid workflow file.
+
+    Such a run has no job to put in failed_jobs, so without this it would count as passed.
+    """
+    urls: list[str] = []
+    for view in views:
+        if view["jobs"]:
+            continue
+        if view["conclusion"] == "success":
+            continue
+        if view["conclusion"] == "skipped":
+            continue
+        urls.append(view["url"])
+    return urls
 
 
 def _failure_annotations(*, repo: str, run_id: int) -> list[str]:
@@ -913,25 +987,35 @@ def _pr_review_state(*, repo: str, pr: str, reviewers: list[ModuleType]) -> dict
     Review and comment bodies are kept apart, oldest first: a review of the head is a verdict even in wording a
     reviewer module does not know, while a comment (a walkthrough, a summary) may still be waiting to be refreshed.
     """
-    view = _gh_json("pr", "view", pr, "--repo", repo, "--json", "headRefOid,comments,reviews,commits")
+    view = _gh_json("pr", "view", pr, "--repo", repo, "--json", "headRefOid,reviews,commits")
+    # gh pr view leaves out when a comment was last edited, and a note in a comment the reviewer rewrites in place
+    # (such as when its next review is available) counts from that edit, not from now
+    pages = _gh_json("api", "--paginate", "--slurp", f"repos/{repo}/issues/{pr}/comments")
     bodies: dict[str, dict[str, list[str]]] = {r.NAME: {"reviews": [], "comments": []} for r in reviewers}
+    comments: dict[str, list[dict[str, str]]] = {r.NAME: [] for r in reviewers}
     last_reviewed: dict[str, str | None] = {r.NAME: None for r in reviewers}
-    for kind, stamp in (("reviews", "submittedAt"), ("comments", "createdAt")):
-        for item in sorted(view[kind], key=lambda i: i.get(stamp) or ""):
-            for reviewer in reviewers:
-                if not reviewer.LOGIN.search(item["author"]["login"]):
-                    continue
-                bodies[reviewer.NAME][kind].append(item["body"])
-                if not item.get("commit"):
-                    continue
-                if not item["body"]:
-                    # a review with no text is the reviewer answering a thread, not a review of that commit
-                    continue
-                last_reviewed[reviewer.NAME] = item["commit"]["oid"]
+    for item in sorted(view["reviews"], key=lambda i: i.get("submittedAt") or ""):
+        for reviewer in reviewers:
+            if not reviewer.LOGIN.search(item["author"]["login"]):
+                continue
+            bodies[reviewer.NAME]["reviews"].append(item["body"])
+            if not item.get("commit"):
+                continue
+            if not item["body"]:
+                # a review with no text is the reviewer answering a thread, not a review of that commit
+                continue
+            last_reviewed[reviewer.NAME] = item["commit"]["oid"]
+    for item in sorted((c for page in pages for c in page), key=lambda i: i["created_at"]):
+        for reviewer in reviewers:
+            if not reviewer.LOGIN.search(item["user"]["login"]):
+                continue
+            bodies[reviewer.NAME]["comments"].append(item["body"])
+            comments[reviewer.NAME].append({"body": item["body"], "edited_at": item["updated_at"]})
     return {
         "head": view["headRefOid"],
         "head_committed_at": view["commits"][-1]["committedDate"],
         "bodies": bodies,
+        "comments": comments,
         "last_reviewed": last_reviewed,
     }
 
@@ -950,9 +1034,11 @@ def _summed_count(total: str | None, count: str) -> str:
 def _changes_since(*, checkout: Path, since: str, head: str) -> list[dict[str, str]]:
     """List each file the branch's own commits changed after `since`, with the lines they added and removed.
 
-    Merges and commits already on the default branch are left out, so merging the default branch in (update-branch)
-    is not counted as a change the reviewer hasn't seen. A file's counts are summed over the commits that touched it.
+    Commits already on the default branch are left out, so merging the default branch in (update-branch) is not
+    counted as a change the reviewer hasn't seen. What such a merge resolved by hand is counted, though: the lines of
+    its combined diff, which differ from every parent. A file's counts are summed over the commits that touched it.
     """
+    default = f"origin/{_default_branch(checkout)}"
     cmd = [
         "git",
         "log",
@@ -961,7 +1047,7 @@ def _changes_since(*, checkout: Path, since: str, head: str) -> list[dict[str, s
         "--format=",
         f"{since}..{head}",
         "--not",
-        f"origin/{_default_branch(checkout)}",
+        default,
     ]
     res = _attempt(cmd=cmd, cwd=checkout)
     if res.returncode != 0:
@@ -978,7 +1064,44 @@ def _changes_since(*, checkout: Path, since: str, head: str) -> list[dict[str, s
         lines_added, lines_removed, path = line.split("\t", 2)
         added[path] = _summed_count(added.get(path), lines_added)
         removed[path] = _summed_count(removed.get(path), lines_removed)
+    merges = _git("rev-list", "--merges", f"{since}..{head}", "--not", default, cwd=checkout).split()
+    for merge in merges:
+        for path, lines_added, lines_removed in _merge_resolution_counts(checkout=checkout, merge=merge):
+            added[path] = _summed_count(added.get(path), lines_added)
+            removed[path] = _summed_count(removed.get(path), lines_removed)
     return [{"file": path, "added": added[path], "removed": removed[path]} for path in added]
+
+
+def _merge_resolution_counts(*, checkout: Path, merge: str) -> list[tuple[str, str, str]]:
+    """Count, per file, the lines a merge's combined diff shows: what the merge changed from every one of its parents.
+
+    That is a conflict resolution (or an edit made in the merge itself); a file the merge took unchanged from one
+    parent doesn't appear. In a hunk, each line starts with one column per parent, and a `+` or `-` in any of them
+    marks it added or removed against that parent.
+    """
+    counts: dict[str, list[int]] = {}
+    path = ""
+    parents = 0
+    for line in _git("show", "--cc", "--format=", merge, cwd=checkout).splitlines():
+        if line.startswith("diff --cc "):
+            path = line.removeprefix("diff --cc ")
+            counts[path] = [0, 0]
+            # the file's own header lines (`--- a/...`, `+++ b/...`) come before its first hunk
+            parents = 0
+            continue
+        if line.startswith("@@"):
+            parents = len(line) - len(line.lstrip("@")) - 1
+            continue
+        if not path:
+            continue
+        if not parents:
+            continue
+        columns = line[:parents]
+        if "+" in columns:
+            counts[path][0] += 1
+        if "-" in columns:
+            counts[path][1] += 1
+    return [(name, str(added), str(removed)) for name, (added, removed) in counts.items()]
 
 
 def _quiet_on_head(*, reviewer: ModuleType, state: dict[str, Any], checkout: Path) -> dict[str, Any] | None:
@@ -1002,7 +1125,7 @@ def _quiet_on_head(*, reviewer: ModuleType, state: dict[str, Any], checkout: Pat
         "verdict": "head_not_reviewed",
         "last_reviewed": last,
         "minutes_since_head_commit": int(quiet // 60),
-        "held_back": reviewer.held_back(state["bodies"][reviewer.NAME]["comments"]),
+        "held_back": reviewer.held_back(state["comments"][reviewer.NAME]),
         "changed_since_last_review": _changes_since(checkout=checkout, since=last, head=state["head"]),
     }
 
@@ -1059,22 +1182,22 @@ def cmd_ai_review(a: argparse.Namespace) -> dict[str, Any]:
         return {"verdict": "none_configured", "reviewers": {}}
     verdicts: dict[str, dict[str, Any]] = {}
     latest: dict[str, dict[str, list[str]]] = {}
+    verdicts_head = ""
 
     def all_reviewed() -> str | None:
+        nonlocal verdicts_head
         state = _pr_review_state(repo=a.repo, pr=a.pr, reviewers=reviewers)
+        # a verdict holds only for the head it was reached on, so a push mid-wait sends every reviewer back to classify
+        if state["head"] != verdicts_head:
+            verdicts.clear()
+            verdicts_head = state["head"]
         bodies = state["bodies"]
         latest.update(bodies)
         for reviewer in reviewers:
             if reviewer.NAME in verdicts:
                 continue
-            result = reviewer.classify(
-                reviews=bodies[reviewer.NAME]["reviews"], comments=bodies[reviewer.NAME]["comments"], head=state["head"]
-            )
-            if result is None:
-                result = _quiet_on_head(reviewer=reviewer, state=state, checkout=Path(a.checkout))
+            result = _reviewer_verdict(reviewer=reviewer, state=state, repo=a.repo, pr=a.pr, checkout=Path(a.checkout))
             if result is not None:
-                if result["verdict"] == "flagged":
-                    _add_findings(result=result, repo=a.repo, pr=a.pr, checkout=Path(a.checkout), reviewer=reviewer)
                 verdicts[reviewer.NAME] = result
         if len(verdicts) < len(reviewers):
             return None
@@ -1085,6 +1208,20 @@ def cmd_ai_review(a: argparse.Namespace) -> dict[str, Any]:
     except FailError as e:
         raise _review_timeout(error=e, reviewers=reviewers, verdicts=verdicts, latest=latest) from e
     return {"verdict": _overall_verdict(verdicts), "head": head, "reviewers": verdicts}
+
+
+def _reviewer_verdict(
+    *, reviewer: ModuleType, state: dict[str, Any], repo: str, pr: str, checkout: Path
+) -> dict[str, Any] | None:
+    bodies = state["bodies"][reviewer.NAME]
+    result = reviewer.classify(reviews=bodies["reviews"], comments=bodies["comments"], head=state["head"])
+    if result is None:
+        result = _quiet_on_head(reviewer=reviewer, state=state, checkout=checkout)
+    if result is None:
+        return None
+    if result["verdict"] == "flagged":
+        _add_findings(result=result, repo=repo, pr=pr, checkout=checkout, reviewer=reviewer)
+    return result
 
 
 def _review_timeout(
@@ -1174,11 +1311,22 @@ def cmd_tag(a: argparse.Namespace) -> dict[str, Any]:
     return {"merge_commit": merge_sha, "tag": tag}
 
 
-def _merged_pr(*, repo: str, branch: str) -> int:
-    prs = _gh_json("pr", "list", "--repo", repo, "--head", branch, "--state", "merged", "--json", "number")
+def _merged_pr(*, repo: str, branch: str) -> dict[str, Any]:
+    prs = _gh_json("pr", "list", "--repo", repo, "--head", branch, "--state", "merged", "--json", "number,headRefOid")
     if not prs:
         raise FailError(f"{repo} has no merged PR from {branch}")
-    return prs[0]["number"]
+    return prs[0]
+
+
+def _require_remote_tip_merged(*, checkout: Path, branch: str, merged_head: str) -> None:
+    tip = _git("ls-remote", "origin", f"refs/heads/{branch}", cwd=checkout).split()
+    if not tip:
+        raise FailError(f"origin has no {branch} to delete")
+    if tip[0] != merged_head:
+        raise FailError(
+            f"origin/{branch} is at {tip[0]}, not {merged_head}, the head its PR merged; "
+            "deleting it would delete the commits pushed since"
+        )
 
 
 def _require_downstream_off_branch(*, checkout: Path, branch: str, downstream: Path) -> str:
@@ -1192,6 +1340,10 @@ def _require_downstream_off_branch(*, checkout: Path, branch: str, downstream: P
     res = _attempt(cmd=["git", "merge-base", "--is-ancestor", match.group(1), f"origin/{branch}"], cwd=checkout)
     if res.returncode == 0:
         raise FailError(f"{downstream} still records {current}, which is on {branch}; re-pin it to the tag first")
+    if res.returncode != 1:
+        raise FailError(
+            f"git merge-base --is-ancestor {match.group(1)} origin/{branch} failed in {checkout}:\n{res.stderr.strip()}"
+        )
     return current
 
 
@@ -1211,14 +1363,53 @@ def _require_every_child(*, repo: str, downstream: list[Path], chain: dict[str, 
         )
 
 
-def _delete_branch(*, checkout: Path, branch: str) -> bool:
-    _ = _git("push", "origin", "--delete", branch, cwd=checkout)
-    if not _has_ref(checkout=checkout, ref=f"refs/heads/{branch}"):
+def _default_to_switch_to(checkout: Path) -> str:
+    """Return the default branch the checkout can move to off the branch being deleted, or refuse before anything is.
+
+    Moving there resets the local default branch to origin's, so a dirty worktree, or a local default branch holding
+    commits origin lacks, refuses here: found only after the remote branch is gone, a rerun could no longer delete it.
+    """
+    dirty = _dirty(checkout)
+    if dirty:
+        raise FailError(f"{checkout} has uncommitted changes; nothing was deleted:\n" + "\n".join(dirty))
+    default = _default_branch(checkout)
+    _ = _git("fetch", "--quiet", "origin", default, cwd=checkout)
+    if _has_ref(checkout=checkout, ref=f"refs/heads/{default}"):
+        unpushed = _git("log", "--oneline", f"origin/{default}..{default}", cwd=checkout).strip()
+        if unpushed:
+            raise FailError(
+                f"{default} in {checkout} has commits not on origin, which moving it to origin/{default} would drop;"
+                f" nothing was deleted:\n{unpushed}"
+            )
+    return default
+
+
+def _require_branch_pushed(*, checkout: Path, branch: str) -> None:
+    if not _has_ref(checkout=checkout, ref=f"refs/remotes/origin/{branch}"):
+        return
+    unpushed = _git("log", "--oneline", f"origin/{branch}..{branch}", cwd=checkout).strip()
+    if unpushed:
+        raise FailError(
+            f"{branch} in {checkout} has commits not on origin, which deleting it would drop; nothing was deleted:\n"
+            f"{unpushed}"
+        )
+
+
+def _delete_branch(*, checkout: Path, branch: str, merged_head: str) -> bool:
+    has_local = _has_ref(checkout=checkout, ref=f"refs/heads/{branch}")
+    switch_to = None
+    if has_local:
+        _require_branch_pushed(checkout=checkout, branch=branch)
+        if _git("symbolic-ref", "--short", "HEAD", cwd=checkout).strip() == branch:
+            switch_to = _default_to_switch_to(checkout)
+    # the lease refuses the delete if a push moved the branch after _require_remote_tip_merged looked
+    _ = _git(
+        "push", f"--force-with-lease=refs/heads/{branch}:{merged_head}", "origin", "--delete", branch, cwd=checkout
+    )
+    if not has_local:
         return False
-    if _git("symbolic-ref", "--short", "HEAD", cwd=checkout).strip() == branch:
-        default = _default_branch(checkout)
-        _ = _git("fetch", "--quiet", "origin", default, cwd=checkout)
-        _ = _git("switch", "-C", default, f"origin/{default}", cwd=checkout)
+    if switch_to is not None:
+        _ = _git("switch", "-C", switch_to, f"origin/{switch_to}", cwd=checkout)
     _ = _git("branch", "-D", branch, cwd=checkout)
     return True
 
@@ -1239,13 +1430,14 @@ def cmd_delete_branch(a: argparse.Namespace) -> dict[str, Any]:
     current: dict[str, str] = {}
     for path in downstream:
         current[str(path)] = _require_downstream_off_branch(checkout=checkout, branch=a.branch, downstream=path)
+    _require_remote_tip_merged(checkout=checkout, branch=a.branch, merged_head=merged_pr["headRefOid"])
     deleted_local = False
     if not a.dry_run:
-        deleted_local = _delete_branch(checkout=checkout, branch=a.branch)
+        deleted_local = _delete_branch(checkout=checkout, branch=a.branch, merged_head=merged_pr["headRefOid"])
     return {
         "repo": a.repo,
         "branch": a.branch,
-        "merged_pr": merged_pr,
+        "merged_pr": merged_pr["number"],
         "downstream_commits": current,
         "dry_run": a.dry_run,
         "deleted_local": deleted_local,
@@ -1267,7 +1459,7 @@ def _require_feature_branch(*, checkout: Path, branch: str) -> None:
 
 
 def _branch_commits(*, checkout: Path, since: str, paths: list[str]) -> dict[str, list[str]]:
-    """List the feature branch's own commits touching each conflicted file, newest first.
+    """List the feature branch's own commits touching each conflicted file, oldest first.
 
     A file the branch changed after the backport copied it (an add/add conflict on a helper or a skill) is resolved
     from the default branch's side with those commits re-applied; one the branch never changed since takes the
@@ -1275,7 +1467,7 @@ def _branch_commits(*, checkout: Path, since: str, paths: list[str]) -> dict[str
     """
     commits: dict[str, list[str]] = {}
     for path in paths:
-        log = _git("log", "--format=%h %s", f"{since}..HEAD", "--", path, cwd=checkout)
+        log = _git("log", "--reverse", "--format=%h %s", f"{since}..HEAD", "--", path, cwd=checkout)
         commits[path] = [line for line in log.splitlines() if line]
     return commits
 
@@ -1350,6 +1542,7 @@ def cmd_update_branch(a: argparse.Namespace) -> dict[str, Any]:
                 ),
                 "next": "resolve each file, show the user the resolution, and after their approval rerun with --finish",
             }
+    _require_no_leaks(checkout=checkout, branch=a.branch, default=default, chain_file=a.chain)
     _ = _git("push", "origin", a.branch, cwd=checkout)
     return {
         "branch": a.branch,
@@ -1408,7 +1601,9 @@ def _add_checkout_verbs(add: AddVerb) -> None:
         sp.add_argument("--checkout", default=".")
         sp.set_defaults(fn=fn)
         if name == "push":
-            sp.add_argument("--chain", required=True, help="the chain file, to check commit messages for a public repo")
+            sp.add_argument(
+                "--chain", required=True, help="the chain file, to check commit messages and changes for a public repo"
+            )
         if name == "behind":
             sp.add_argument(
                 "--parent-checkout",
@@ -1451,6 +1646,9 @@ def _add_checkout_verbs(add: AddVerb) -> None:
     ub = add("update-branch")
     ub.add_argument("--checkout", required=True, help="the checkout that has the feature branch")
     ub.add_argument("--branch", required=True)
+    ub.add_argument(
+        "--chain", required=True, help="the chain file, to check commit messages and changes for a public repo"
+    )
     ub.add_argument("--finish", action="store_true", help="commit and push a merge whose conflicts are resolved")
     ub.add_argument(
         "--allow-unpushed", action="store_true", help="push commits that were not on GitHub yet; only after asking"

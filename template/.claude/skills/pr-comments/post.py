@@ -17,13 +17,16 @@ Usage:
   post.py --pr <number> --comment-id <review id> --comment-type pulls/reviews --body-file <path> [--repo OWNER/NAME]
 
 Either form takes --commit <full sha>, which fills each [COMMIT LINK] in the body file with a markdown link to that
-commit as it appears in the PR, the form GitHub associates with the PR. A [COMMIT LINK] inside a code span or a fenced
-code block is text about the placeholder, not a placeholder, and stays as written.
+commit as it appears in the PR, the form GitHub associates with the PR. A commit that isn't one of the PR's pushed
+commits is refused, except on a PR with more commits than GitHub lists (250), where it is only warned about. A
+[COMMIT LINK] inside a code span or a fenced code block is text about the placeholder, not a placeholder, and stays
+as written.
 
 Without --repo, the PR belongs to the current directory's origin remote. In place of --repo, --checkout PATH posts as
-if run from that checkout of another repo, whose origin remote the PR belongs to. gh prefers the login
-`gh auth login` stored, which reaches every repo the user can, over a codespace's repo-scoped GITHUB_TOKEN; with no
-stored login it uses the environment's GH_TOKEN or GITHUB_TOKEN.
+if run from that checkout of another repo, whose origin remote the PR belongs to; --body-file still resolves against
+the directory this runs in, as every path argument of these scripts does. gh prefers the login `gh auth login` stored,
+which reaches every repo the user can, over a codespace's repo-scoped GITHUB_TOKEN; with no stored login it uses the
+environment's GH_TOKEN or GITHUB_TOKEN.
 
 The AI attribution footer is appended to the body file first if it isn't already its last line, so drafts never
 include it themselves. On success the comment's URL is printed, then the body exactly as it was posted (links filled,
@@ -50,6 +53,7 @@ from utils import add_repo_arguments
 from utils import count_commit_link_placeholders
 from utils import enter_checkout
 from utils import fill_commit_link_placeholders
+from utils import gh_rest
 from utils import gh_run
 from utils import issue_comment_reply_marker
 from utils import owner_and_repo
@@ -59,6 +63,8 @@ from utils import split_code
 
 REPLY_FOOTER = "*Reply drafted by AI (Claude), reviewed and approved by the author before posting.*"
 _FULL_SHA_RE = re.compile(r"[0-9a-f]{40}")
+# GitHub lists at most this many of a PR's commits, through REST and GraphQL alike
+PR_COMMITS_LISTED_AT_MOST = 250
 
 
 def _in_prose(text: str, *, content: str) -> bool:
@@ -70,12 +76,33 @@ def _in_prose(text: str, *, content: str) -> bool:
     return False
 
 
+def _pr_commit_shas(*, owner: str, repo: str, pr: int) -> set[str]:
+    try:
+        commits = gh_rest("api", f"repos/{owner}/{repo}/pulls/{pr}/commits", "--paginate")
+    except subprocess.CalledProcessError as e:
+        _ = sys.stderr.write(f"Cannot list PR #{pr}'s commits: {e.stderr}\n")
+        sys.exit(1)
+    return {commit["sha"] for commit in commits}
+
+
 def _commit_link(commit: str | None, *, owner: str, repo: str, pr: int) -> str | None:
     if commit is None:
         return None
     if _FULL_SHA_RE.fullmatch(commit) is None:
         _ = sys.stderr.write(f"--commit must be a full 40-character SHA, not {commit}\n")
         sys.exit(1)
+    pr_commits = _pr_commit_shas(owner=owner, repo=repo, pr=pr)
+    if commit not in pr_commits:
+        if len(pr_commits) >= PR_COMMITS_LISTED_AT_MOST:
+            _ = sys.stderr.write(
+                f"Warning: --commit {commit} is not among the {len(pr_commits)} commits GitHub lists for PR #{pr}, "
+                "its most it will list, so it can't be checked; linking it anyway.\n"
+            )
+        else:
+            _ = sys.stderr.write(
+                f"--commit {commit} is not one of PR #{pr}'s commits: push it first, or check the SHA.\n"
+            )
+            sys.exit(1)
     return pr_commit_link(owner=owner, repo=repo, pr=pr, commit=commit)
 
 
@@ -114,7 +141,11 @@ def _read_body_file(body_file: Path) -> str:
 
 
 def _with_reply_footer(content: str) -> str:
-    """Return the body with the AI attribution footer as its last line, adding it only if it isn't there already."""
+    """Return the body with the AI attribution footer as its last line.
+
+    A body that already ends with the footer (a retry of a failed post, say) is returned as it is, so the footer is
+    never doubled; otherwise the footer is appended after a blank line.
+    """
     non_empty_lines = [line.strip() for line in content.splitlines() if line.strip()]
     if non_empty_lines and non_empty_lines[-1] == REPLY_FOOTER:
         return content

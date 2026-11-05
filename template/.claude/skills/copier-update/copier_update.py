@@ -32,7 +32,8 @@ Verbs (all print JSON on stdout; errors go to stderr with exit 1):
                                      confidence (unless --approved names it) or the message's
                                      first paragraph spans more than one line, stage everything
                                      but tmp/, refuse conflict artefacts, commit
-  report [project] DRAFT             validate the draft against report.schema.json, then
+  report [project] DRAFT             record the commits made since the draft's project_commit,
+                                     validate the draft against report.schema.json, then
                                      write the JSON report and a self-contained .html to tmp/
   pr [project] --title T --body-file F   push the branch and print the `gh pr create` command for
                                      the agent to run itself, so the permission settings decide it
@@ -189,8 +190,10 @@ def question_names(copier_yaml: str) -> list[str]:
 def _question_info(*, name: str, spec: str) -> dict[str, Any]:
     inline, __, settings = spec.partition("\n")
     if inline:
-        # `name: value` is copier's short form for a question whose default is that value
-        return {"name": name, "spec": inline, "has_default": True}
+        # `name: # ...` is YAML's null with a comment after it, not a default
+        if not inline.startswith("#"):
+            # `name: value` is copier's short form for a question whose default is that value
+            return {"name": name, "spec": inline, "has_default": True}
     settings = textwrap.dedent(settings)
     return {
         "name": name,
@@ -268,12 +271,13 @@ def resolve_answers_file(*, project: Path, answers_file: str | None) -> str:
 
 def default_branch(project: Path) -> str:
     res = _run(cmd=["git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD"], cwd=project)
-    if res.returncode == 0:
-        return res.stdout.strip().split("/", 1)[-1]
-    for name in ("main", "master"):
-        if _run(cmd=["git", "rev-parse", "--verify", "-q", f"refs/heads/{name}"], cwd=project).returncode == 0:
-            return name
-    return "main"
+    if res.returncode != 0:
+        # guessing main or master would let the default-branch guard pass on a repo whose default is something else
+        raise FailError(
+            f"origin/HEAD is not set in {project}, so its default branch is unknown; "
+            "run `git remote set-head origin --auto` there first"
+        )
+    return res.stdout.strip().split("/", 1)[-1]
 
 
 def current_branch(project: Path) -> str | None:
@@ -303,12 +307,30 @@ def read_answers(*, project: Path, answers_file: str | None) -> tuple[str, dict[
     data = {key: _scalar(value) for key, value in _top_level_values(path.read_text()).items()}
     if "_src_path" not in data:
         raise FailError(f"{path} has no _src_path")
+    if _is_relative_local_path(data["_src_path"]):
+        # copier reads a relative template path from the project; the mirror is cloned from elsewhere
+        data["_src_path"] = str((project / data["_src_path"]).resolve())
     return rel, data
+
+
+def _is_relative_local_path(src_path: str) -> bool:
+    for prefix in _SHORTHANDS:
+        if src_path.startswith(prefix):
+            return False
+    if "://" in src_path:
+        return False
+    if re.match(r"^[\w.-]+@[\w.-]+:", src_path) is not None:
+        # scp-style ssh, such as git@github.com:owner/repo.git
+        return False
+    if Path(src_path).is_absolute():
+        return False
+    return True
 
 
 def template_mirror(*, src_path: str, cache_dir: str | None, stored_gh_credentials: bool) -> Path:
     url = resolve_src_url(src_path)
-    cache_root = Path(cache_dir) if cache_dir else Path(tempfile.gettempdir()) / "copier-update-cache"
+    # the clone runs from the cache directory's parent, so a relative --cache-dir would be read from there
+    cache_root = Path(cache_dir).resolve() if cache_dir else Path(tempfile.gettempdir()) / "copier-update-cache"
     dest = cache_root / (hashlib.sha256(url.encode()).hexdigest()[:16] + ".git")
     if dest.is_dir():
         _ = _git("fetch", "--prune", "--tags", "--quiet", cwd=dest, stored_gh_credentials=stored_gh_credentials)
@@ -321,11 +343,12 @@ def template_mirror(*, src_path: str, cache_dir: str | None, stored_gh_credentia
     return dest
 
 
-def show_file(*, mirror: Path, ref: str) -> str:
+def show_file(*, mirror: Path, ref: str, stored_gh_credentials: bool) -> str:
     errors: list[str] = []
     for name in COPIER_FILES:
         try:
-            return _git("show", f"{ref}:{name}", cwd=mirror)
+            # a --filter=blob:none mirror fetches the blob from the template repo here, which needs the same credentials
+            return _git("show", f"{ref}:{name}", cwd=mirror, stored_gh_credentials=stored_gh_credentials)
         except FailError as e:
             errors.append(str(e))
     raise FailError(f"no {'/'.join(COPIER_FILES)} at {ref}:\n" + "\n".join(errors))
@@ -379,7 +402,8 @@ def cmd_branch(a: argparse.Namespace) -> dict[str, Any]:
         _ = _git("switch", "-c", name, f"origin/{default}", cwd=project)
         path = project
     else:
-        path = Path(a.worktree)
+        # git runs in the project, so a relative --worktree is resolved here first, from where the command was typed
+        path = Path(a.worktree).resolve()
         _ = _git("worktree", "add", "-b", name, str(path), f"origin/{default}", cwd=project)
     return {"branch": name, "path": str(path.resolve()), "base": f"origin/{default}"}
 
@@ -424,8 +448,8 @@ def cmd_new_questions(a: argparse.Namespace) -> dict[str, Any]:
         src_path=answers["_src_path"], cache_dir=a.cache_dir, stored_gh_credentials=a.stored_gh_credentials
     )
     diff = diff_questions(
-        old_yaml=show_file(mirror=mirror, ref=current),
-        new_yaml=show_file(mirror=mirror, ref=a.ref),
+        old_yaml=show_file(mirror=mirror, ref=current, stored_gh_credentials=a.stored_gh_credentials),
+        new_yaml=show_file(mirror=mirror, ref=a.ref, stored_gh_credentials=a.stored_gh_credentials),
         answered={str(k) for k in answers if not str(k).startswith("_")},
     )
     return {
@@ -467,8 +491,19 @@ def task_copier_command(*, project: Path, task_name: str, task_vars: list[str]) 
     raise FailError(f"`task --dry {task_name}` printed no `copier update` line:\n{output.strip()}")
 
 
+def _copier_answers_file(command: list[str]) -> str:
+    for index, arg in enumerate(command):
+        if arg == "--answers-file":
+            return command[index + 1]
+        if arg == "-a":
+            return command[index + 1]
+        if arg.startswith("--answers-file="):
+            return arg.removeprefix("--answers-file=")
+    return ".copier-answers.yml"
+
+
 def unanswerable_questions(
-    *, answers: dict[str, Any], ref: str, data: dict[str, str], a: argparse.Namespace
+    *, answers: dict[str, Any], ref: str, answered: set[str], a: argparse.Namespace
 ) -> list[str]:
     mirror = template_mirror(
         src_path=answers["_src_path"], cache_dir=a.cache_dir, stored_gh_credentials=a.stored_gh_credentials
@@ -477,15 +512,19 @@ def unanswerable_questions(
     if not current:
         raise FailError("answers file has no _commit; cannot tell which template questions are new")
     diff = diff_questions(
-        old_yaml=show_file(mirror=mirror, ref=current),
-        new_yaml=show_file(mirror=mirror, ref=ref),
+        old_yaml=show_file(mirror=mirror, ref=current, stored_gh_credentials=a.stored_gh_credentials),
+        new_yaml=show_file(mirror=mirror, ref=ref, stored_gh_credentials=a.stored_gh_credentials),
         answered={str(k) for k in answers if not str(k).startswith("_")},
     )
     missing: list[str] = []
     for question in diff["new"]:
         if question["has_default"]:
             continue
-        if question["name"] in data:
+        if question["name"] in answered:
+            continue
+        if re.search(r"^when\s*:", question["spec"], flags=re.MULTILINE) is not None:
+            # copier skips such a question while its `when` is false, and leaves an answer to it out of the answers
+            # file; while true, `copier update --defaults` stops with "is required" before it renders anything
             continue
         missing.append(question["name"])
     return missing
@@ -527,13 +566,30 @@ def cmd_update(a: argparse.Namespace) -> dict[str, Any]:
         raise FailError(
             f"the project has no `task {task_name}`; this skill only updates through the project's own task"
         )
+    task_answers_file = _copier_answers_file(
+        task_copier_command(project=project, task_name=task_name, task_vars=task_vars)
+    )
+    if Path(task_answers_file) != Path(answers_file):
+        # the task would update another template's instance while this checks and reports the selected one
+        raise FailError(
+            f"`task {task_name}` updates {task_answers_file}, not the selected {answers_file}; "
+            "this skill only updates the instance the project's own task updates"
+        )
     data = _parse_data(a.data)
-    missing = unanswerable_questions(answers=answers, ref=target_ref, data=data, a=a)
+    answered = set(data)
+    if a.data_file is not None:
+        # only the keys: the values stay in the file, which copier reads from the project directory
+        answered |= set(_top_level_values((project / a.data_file).read_text()))
+    missing = unanswerable_questions(answers=answers, ref=target_ref, answered=answered, a=a)
     if missing:
-        raise FailError(f"new template questions with no default need an answer via --data: {', '.join(missing)}")
+        raise FailError(
+            f"new template questions with no default need an answer via --data or --data-file: {', '.join(missing)}"
+        )
     cmd = update_command(project=project, task_name=task_name, task_vars=task_vars, data=data, data_file=a.data_file)
     res = _run(cmd=cmd, cwd=project, stored_gh_credentials=a.stored_gh_credentials)
     _, new_answers = read_answers(project=project, answers_file=answers_file)
+    # TODO: consider comparing by parsed value: copier saves `--data enabled=True` (or `yes`) as `true`, which this
+    # text comparison reports as dropped, so for now a boolean has to be passed the way copier writes it
     dropped = [k for k, v in data.items() if str(new_answers.get(k)) != v]
     if res.returncode == 0 and dropped:
         raise FailError(f"copier ran but these --data answers did not reach {answers_file}: {', '.join(dropped)}")
@@ -597,9 +653,19 @@ def cmd_conflicts(a: argparse.Namespace) -> dict[str, Any]:
         raise FailError(f"the project has no `task {PRUNE_TASK}`")
     # the task exits non-zero while real conflicts remain: that is the answer, not a failure
     res = _run(cmd=["task", PRUNE_TASK], cwd=project)
+    output = (res.stdout + res.stderr).strip()
+    rej_files = list_rej_files(project)
+    # a crash also exits non-zero, and would leave false positives listed as real conflicts
+    if "Traceback (most recent call last)" in output:
+        raise FailError(f"`task {PRUNE_TASK}` crashed, so the .rej files left may not all be real conflicts:\n{output}")
+    if res.returncode != 0:
+        # a task that failed before the script ran pruned nothing, so its .rej files may still hold false positives
+        if "Remaining .rej conflicts:" not in output:
+            raise FailError(f"`task {PRUNE_TASK}` failed without listing the conflicts it left:\n{output}")
     return {
-        "prune_output": (res.stdout + res.stderr).strip(),
-        "rej_files": list_rej_files(project),
+        "prune_output": output,
+        "prune_returncode": res.returncode,
+        "rej_files": rej_files,
         "conflict_markers": find_conflict_markers(project),
     }
 
@@ -725,9 +791,22 @@ def require_one_line_subject(message_file: Path) -> None:
         )
 
 
+def _require_pre_commit_hook(project: Path) -> None:
+    # the commit runs every hook not in --skip only through the git hook, so without it nothing would be checked
+    hook = project / _git("rev-parse", "--git-path", "hooks/pre-commit", cwd=project).strip()
+    if not hook.is_file():
+        raise FailError(f"no pre-commit git hook installed in {project}; run `prek install` or `pre-commit install`")
+    if not os.access(hook, os.X_OK):
+        raise FailError(
+            f"the pre-commit git hook in {project} is not executable, so git would skip it; run `prek install` or"
+            " `pre-commit install` again"
+        )
+
+
 def cmd_commit(a: argparse.Namespace) -> dict[str, Any]:
     project = Path(a.project)
     where = guard_not_default_branch(project)
+    _require_pre_commit_hook(project)
     require_one_line_subject(Path(a.message_file))
     draft = json.loads(Path(a.draft).read_text())
     # the confidence gate reads `filename` and `confidence`; a draft with other keys would pass it unchecked
@@ -750,8 +829,10 @@ def cmd_commit(a: argparse.Namespace) -> dict[str, Any]:
     staged = [p for p in _git("diff", "--cached", "--name-only", "-z", cwd=project).split("\0") if p]
     if not staged:
         raise FailError("nothing staged: did the update run?")
+    # deleting a tracked artifact removes it from the tree, so only paths the commit adds or changes are checked
+    kept = [p for p in _git("diff", "--cached", "--name-only", "--diff-filter=d", "-z", cwd=project).split("\0") if p]
     leftovers: list[str] = []
-    for path in staged:
+    for path in kept:
         if path.endswith((".rej", ".orig")):
             leftovers.append(path)
             continue
@@ -768,7 +849,9 @@ def cmd_commit(a: argparse.Namespace) -> dict[str, Any]:
         raise FailError(
             "refusing to commit inline conflict markers:\n  " + "\n  ".join(f"{m['path']}:{m['line']}" for m in markers)
         )
-    _ = _git("commit", "-q", "-F", a.message_file, cwd=project, extra_env={"SKIP": ",".join(a.skip)})
+    # git runs in the project, so a relative --message-file is resolved here first, from where the command was typed
+    message_file = str(Path(a.message_file).resolve())
+    _ = _git("commit", "-q", "-F", message_file, cwd=project, extra_env={"SKIP": ",".join(a.skip)})
     return {
         **where,
         "sha": _git("rev-parse", "HEAD", cwd=project).strip(),
@@ -794,12 +877,70 @@ def _object_errors(*, value: object, spec: dict[str, Any], path: str) -> list[st
         field: dict[str, Any] = properties.get(key, {})
         if "enum" in field and field_value not in field["enum"]:
             errors.append(f"{path}/{key}: {field_value!r} is not one of {', '.join(map(str, field['enum']))}")
+        # the report reads these for truthiness, where the string "false" counts as true
+        if field.get("type") == "boolean":
+            if not isinstance(field_value, bool):
+                errors.append(f"{path}/{key}: must be true or false, not {field_value!r}")
+        # the report maps over these, and one that isn't a list stops the whole page rendering
+        if field.get("type") == "array":
+            if not isinstance(field_value, list):
+                errors.append(f"{path}/{key}: must be a list, not {field_value!r}")
         if field.get("type") == "object" and "properties" in field:
             errors += _object_errors(value=field_value, spec=field, path=f"{path}/{key}")
+    return errors + _conditional_errors(value=value, spec=spec, path=path)
+
+
+def _property_holds(*, field_value: object, constraint: dict[str, Any]) -> bool:
+    if "const" in constraint:
+        if field_value != constraint["const"]:
+            return False
+    if "enum" in constraint:
+        if field_value not in constraint["enum"]:
+            return False
+    if "properties" in constraint:
+        if not isinstance(field_value, dict):
+            return False
+        if not _condition_holds(value=field_value, condition=constraint):
+            return False
+    return True
+
+
+def _condition_holds(*, value: dict[str, Any], condition: dict[str, Any]) -> bool:
+    for key in condition.get("required", []):
+        if key not in value:
+            return False
+    for key, constraint in condition.get("properties", {}).items():
+        if key not in value:
+            continue
+        if not _property_holds(field_value=value[key], constraint=constraint):
+            return False
+    return True
+
+
+def _conditional_errors(*, value: dict[str, Any], spec: dict[str, Any], path: str) -> list[str]:
+    """Check an object against its schema's `allOf` if/then rules, such as an unfinished resolution's needs_review.
+
+    Only the keywords those rules use are understood: `required`, and `const` or `enum` on a property, or, in an `if`,
+    a property's own `properties` and `required`, for a rule on a field of a nested object such as `rej_file`.
+    """
+    errors: list[str] = []
+    for rule in spec.get("allOf", []):
+        if not _condition_holds(value=value, condition=rule["if"]):
+            continue
+        then: dict[str, Any] = rule["then"]
+        errors += [
+            f"{path}: missing {key!r}; {rule['description']}" for key in then.get("required", []) if key not in value
+        ]
+        for key, constraint in then.get("properties", {}).items():
+            if key not in value:
+                continue
+            if "const" in constraint:
+                if value[key] != constraint["const"]:
+                    errors.append(f"{path}/{key}: must be {json.dumps(constraint['const'])}; {rule['description']}")
     return errors
 
 
-def validate_report(report: dict[str, Any]) -> list[str]:
+def validate_report(report: object) -> list[str]:
     """Catch what a hand-written draft gets wrong: a misnamed, missing or misshapen field, or a value off its list.
 
     report.schema.json documents the whole shape, but checking all of it would take a JSON Schema library, and this
@@ -808,6 +949,8 @@ def validate_report(report: dict[str, Any]) -> list[str]:
     """
     schema = json.loads(SCHEMA_PATH.read_text())
     errors = _object_errors(value=report, spec=schema, path="<root>")
+    if not isinstance(report, dict):
+        return errors
     resolutions = report.get("resolutions")
     if not isinstance(resolutions, list):
         return [*errors, "resolutions: must be a list of resolution objects"]
@@ -819,9 +962,27 @@ def validate_report(report: dict[str, Any]) -> list[str]:
 
 
 def render_report_html(report: dict[str, Any]) -> str:
-    # the JSON sits inside a <script> block, so "</" must not appear literally
-    payload = json.dumps(report, ensure_ascii=False).replace("</", "<\\/")
+    # the JSON sits inside a <script> block, where "</" ends it and "<!--" followed by "<script" keeps it from ending
+    # at all, so no "<" appears literally; JSON reads < back as "<"
+    payload = json.dumps(report, ensure_ascii=False).replace("<", "\\u003c")
     return VIEWER_PATH.read_text().replace("__REPORT_JSON__", payload)
+
+
+def _commits_since(*, project: Path, report: dict[str, Any]) -> list[dict[str, str]]:
+    """Return the commits on HEAD after the report's project_commit, newest first.
+
+    `report` runs right after an update's own commits (the update commit, then any fix commits), so these are exactly
+    the commits that update made. A branch carrying several updates gets one report per update, so listing the whole
+    branch instead would repeat the same list under every report.
+    """
+    project_commit = report.get("project_commit")
+    if not isinstance(project_commit, dict):
+        return []
+    sha = project_commit.get("sha")
+    if not isinstance(sha, str):
+        return []
+    log = _git("log", "--format=%h%x00%s", f"{sha}..HEAD", cwd=project).strip()
+    return [dict(zip(("sha", "subject"), line.split("\0", 1), strict=True)) for line in log.splitlines()]
 
 
 def cmd_report(a: argparse.Namespace) -> dict[str, Any]:
@@ -833,6 +994,8 @@ def cmd_report(a: argparse.Namespace) -> dict[str, Any]:
     _ = report.setdefault("schema_version", "1.0.0")
     _ = report.setdefault("operation", "copier-update")
     _ = report.setdefault("resolved_at", _iso(now))
+    if "commits" not in report:
+        report["commits"] = _commits_since(project=project, report=report)
     errors = validate_report(report)
     if errors:
         raise FailError("report invalid, nothing written:\n" + "\n".join(errors))
@@ -887,6 +1050,11 @@ def report_markdown(*, report: dict[str, Any], commits: list[dict[str, str]]) ->
     return "\n".join(lines) + "\n"
 
 
+def _remote_repo(*, project: Path, remote: str) -> str:
+    remote_url = _git("remote", "get-url", remote, cwd=project).strip()
+    return re.sub(r"^(https://github\.com/|git@github\.com:)", "", remote_url).removesuffix(".git")
+
+
 def cmd_pr(a: argparse.Namespace) -> dict[str, Any]:
     project = Path(a.project)
     where = guard_not_default_branch(project)
@@ -896,8 +1064,7 @@ def cmd_pr(a: argparse.Namespace) -> dict[str, Any]:
     _ = _git("push", "-u", a.remote, f"HEAD:{branch}", cwd=project, stored_gh_credentials=creds)
     log = _git("log", "--format=%h%x00%s", f"{a.remote}/{base}..HEAD", cwd=project).strip()
     commits = [dict(zip(("sha", "subject"), line.split("\0", 1), strict=True)) for line in log.splitlines()]
-    remote_url = _git("remote", "get-url", a.remote, cwd=project).strip()
-    repo = re.sub(r"^(https://github\.com/|git@github\.com:)", "", remote_url).removesuffix(".git")
+    repo = _remote_repo(project=project, remote=a.remote)
     prefix = ""
     if creds:
         prefix = "env -u GITHUB_TOKEN -u GH_TOKEN "
@@ -920,15 +1087,24 @@ def cmd_pr(a: argparse.Namespace) -> dict[str, Any]:
 def cmd_comment_report(a: argparse.Namespace) -> dict[str, Any]:
     project = Path(a.project)
     where = guard_not_default_branch(project)
-    base = a.base or where["default_branch"]
     branch = where["branch"]
-    log = _git("log", "--format=%h%x00%s", f"{a.remote}/{base}..HEAD", cwd=project).strip()
-    commits = [dict(zip(("sha", "subject"), line.split("\0", 1), strict=True)) for line in log.splitlines()]
-    comment = project / "tmp" / "pr-comment.md"
+    report = json.loads(Path(a.report).read_text())
+    # gh runs in the project, so a path relative to where the command was typed would be read from the wrong place
+    comment = (project / "tmp" / "pr-comment.md").resolve()
     comment.parent.mkdir(exist_ok=True)
-    _ = comment.write_text(report_markdown(report=json.loads(Path(a.report).read_text()), commits=commits))
+    _ = comment.write_text(report_markdown(report=report, commits=report.get("commits", [])))
     res = _run(
-        cmd=["gh", "pr", "comment", branch, "--body-file", str(comment)],
+        # the PR lives where cmd_pr opened it: in --remote's repo, whatever gh would pick from this checkout
+        cmd=[
+            "gh",
+            "pr",
+            "comment",
+            branch,
+            "--repo",
+            _remote_repo(project=project, remote=a.remote),
+            "--body-file",
+            str(comment),
+        ],
         cwd=project,
         stored_gh_credentials=a.stored_gh_credentials,
     )
@@ -1008,7 +1184,6 @@ def _parser() -> argparse.ArgumentParser:
     pr.add_argument("--ready", action="store_true", help="open it ready for review instead of as a draft")
     cm_report = verb("comment-report", cmd_comment_report, remote=True)
     cm_report.add_argument("--report", required=True, help="the report JSON from `report`")
-    cm_report.add_argument("--base", default=None)
     cm_report.add_argument("--remote", default="origin")
 
     cr = sub.add_parser("capture-rej")

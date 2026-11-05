@@ -21,17 +21,21 @@ GH_TIMEOUT_SECONDS = 30
 
 # Findings from an AI code review are posted under the account of the person who ran the review, so their author is
 # the current user. This hidden marker is how read.py tells such a finding (still awaiting a response) apart from the
-# user's own replies (which mark a thread as addressed).
+# user's own replies (which mark a thread as addressed). A finding ID outside FINDING_ID_PATTERN would make a marker
+# this can't parse, so the finding would pass for one of the user's replies.
+FINDING_ID_PATTERN = r"[A-Za-z0-9_-]+"
 _AI_REVIEW_FINDING_RE = re.compile(
-    r"<!-- ai-review-finding id=(?P<id>[A-Za-z0-9_-]+)(?: related=(?P<related>[A-Za-z0-9_,-]+))? -->"
+    rf"<!-- ai-review-finding id=(?P<id>{FINDING_ID_PATTERN})"
+    rf"(?: related=(?P<related>{FINDING_ID_PATTERN}(?:,{FINDING_ID_PATTERN})*))? -->"
 )
 
 # GitHub has no threading for top-level PR comments, so a reply to one is a new top-level comment carrying this hidden
-# marker, which lets read.py treat the original as addressed. post.py writes it.
-_ISSUE_COMMENT_REPLY_RE = re.compile(r"<!-- reply-to-issue-comment id=(?P<id>\d+) -->")
-# A review's own body has no thread either, so a reply to it is a top-level comment carrying this marker, by the same
+# marker, which lets read.py treat the original as addressed. post.py writes it as the body's last line, and only a
+# marker there counts: one quoted earlier in a comment, such as a reply explaining the markers, answers nothing.
+_ISSUE_COMMENT_REPLY_RE = re.compile(r"<!-- reply-to-issue-comment id=(?P<id>\d+) -->\s*\Z")
+# A review's own body has no thread either, so a reply to it is a top-level comment ending in this marker, by the same
 # logic.
-_REVIEW_REPLY_RE = re.compile(r"<!-- reply-to-review id=(?P<id>\d+) -->")
+_REVIEW_REPLY_RE = re.compile(r"<!-- reply-to-review id=(?P<id>\d+) -->\s*\Z")
 
 # An independent verifier posts its verdict on a reply to an AI review finding under the same account as the reply,
 # so this hidden marker is how read.py tells a verdict apart from the reply it judges: a disagreement reopens the
@@ -350,7 +354,12 @@ def owner_and_repo(*, repo: str | None) -> tuple[str, str]:
 
 
 def add_repo_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add --repo and --checkout, the two ways a script is told which repo the PR belongs to."""
+    """Add --repo and --checkout, the two ways a script is told which repo the PR belongs to.
+
+    They are mutually exclusive: --repo names the repo outright, while --checkout points at a clone of it and the
+    script then acts as if run from there (see `enter_checkout`). With neither, the origin remote of the current
+    directory decides.
+    """
     repo_source = parser.add_mutually_exclusive_group()
     _ = repo_source.add_argument(
         "--repo", default=None, metavar="OWNER/NAME", help="the PR's repo (default: the origin remote's)"
@@ -390,23 +399,28 @@ def pr_commit_link(*, owner: str, repo: str, pr: int, commit: str) -> str:
 
 # Markdown code: a fenced block, opened by a line starting with 3+ backticks or tildes (a backtick fence's info string
 # holds no backtick) and closed by a line of at least as many of the same character (or running to the end, as GitHub
-# renders an unclosed fence), or an inline code span opened and closed by whole backtick runs of the same length.
+# renders an unclosed fence), or an inline code span opened and closed by whole backtick runs of the same length. A
+# backslash-escaped backtick is literal text and opens no span; one closes a span, since backslashes inside code are
+# literal too.
 _CODE_RE = re.compile(
     r"^ {0,3}(?P<fence>(?P<fence_char>[`~])(?P=fence_char){2,})(?:(?<=`)[^`\n]*|(?<=~)[^\n]*)$"
     r"(?:\n.*?^ {0,3}(?P=fence)(?P=fence_char)*[ \t]*$|.*\Z)"
-    r"|(?<!`)(?P<ticks>`+)(?!`).+?(?<!`)(?P=ticks)(?!`)",
+    r"|(?<![`\\])(?P<ticks>`+)(?!`).+?(?<!`)(?P=ticks)(?!`)",
     re.DOTALL | re.MULTILINE,
 )
 # A reviewer's block of instructions written for AI agents: CodeRabbit wraps it in these markers, and its older
-# reviews put it in a <details> block whose summary says so.
+# reviews put it in a <details> block whose summary says so. Each block opens at the start of a line (inside a
+# quote, after its `>`), which a marker quoted in a code span never does; a match starting at a quoted marker would
+# run on to the real block's end and take the finding's own text with it.
 _AI_AGENT_PROMPT_RE = re.compile(
-    r"<!-- ai-agent-prompt:start -->.*?<!-- ai-agent-prompt:end -->"
-    r"|<details>\s*<summary>(?:(?!</summary>).)*Prompt for AI Agents(?:(?!</summary>).)*</summary>.*?</details>",
-    re.DOTALL,
+    r"^[ \t>]*<!-- ai-agent-prompt:start -->.*?<!-- ai-agent-prompt:end -->"
+    r"|^[ \t>]*<details>\s*<summary>(?:(?!</summary>).)*Prompt for AI Agents(?:(?!</summary>).)*</summary>.*?</details>",
+    re.DOTALL | re.MULTILINE,
 )
 # The scripts CodeRabbit ran while checking a finding, and their output: how it got there, not what it found.
 _ANALYSIS_CHAIN_RE = re.compile(
-    r"<details>\s*<summary>(?:(?!</summary>).)*Analysis chain(?:(?!</summary>).)*</summary>.*?</details>", re.DOTALL
+    r"^[ \t>]*<details>\s*<summary>(?:(?!</summary>).)*Analysis chain(?:(?!</summary>).)*</summary>.*?</details>",
+    re.DOTALL | re.MULTILINE,
 )
 # CodeRabbit ends a review body with machinery rather than findings: a fix-everything checkbox, a prompt covering
 # every comment, and its "Review info" (configuration, commits, files processed).
@@ -459,6 +473,22 @@ def fill_commit_link_placeholders(content: str, *, link: str) -> str:
     return "".join(filled)
 
 
+def _without_review_footer(body: str) -> str:
+    """Return the body up to its review footer, or all of it when it has none.
+
+    The footer is searched for in prose only: a finding that quotes the footer's markup in a code span or fenced block
+    is talking about it, and the text after the quote is still the finding's.
+    """
+    offset = 0
+    for text, is_code in split_code(body):
+        if not is_code:
+            footer = _REVIEW_FOOTER_RE.search(text)
+            if footer is not None:
+                return body[: offset + footer.start()]
+        offset += len(text)
+    return body
+
+
 def strip_markup(body: str) -> str:
     """Return a comment body as readable text: its Markdown with the reviewer's machinery removed.
 
@@ -468,10 +498,7 @@ def strip_markup(body: str) -> str:
     HTML tags (the text inside a <details> or <summary> stays). Runs of blank lines left behind, quoted or not,
     collapse to one.
     """
-    footer = _REVIEW_FOOTER_RE.search(body)
-    if footer is not None:
-        body = body[: footer.start()]
-    body = _ANALYSIS_CHAIN_RE.sub("", _AI_AGENT_PROMPT_RE.sub("", body))
+    body = _ANALYSIS_CHAIN_RE.sub("", _AI_AGENT_PROMPT_RE.sub("", _without_review_footer(body)))
     stripped: list[str] = []
     for text, is_code in split_code(body):
         if is_code:

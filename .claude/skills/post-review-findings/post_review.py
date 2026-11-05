@@ -7,7 +7,7 @@
 Usage:
   post_review.py import --from <file> --pr <number> --commit <sha> --out <findings file> [--model <id>] [--effort <level>]
   post_review.py plan --findings-file <findings file> [--preview <markdown file>] [--resume]
-  post_review.py post --findings-file <findings file> [--resume]
+  post_review.py post --findings-file <findings file> --head <approved pr_head> --base <approved pr_base> [--resume]
 
 import  Reads either a file holding the JSON array of findings /code-review reports, or the transcript of the
         /code-review agent (the .jsonl output file named in its task notification, whose final message holds that
@@ -23,16 +23,17 @@ import  Reads either a file holding the JSON array of findings /code-review repo
 plan    Prints, as JSON, where each finding would be posted and anything that must be resolved first. Posts nothing.
         With --preview, also writes the review body and every comment, exactly as they would be posted, to a
         markdown file for the user to read.
-post    Re-runs the plan and refuses if anything needs attention. Then creates a pending review on the anchor commit,
-        adds every finding as a thread (or as a top-level PR comment when its file is not in the PR), fills in the
-        links between related findings now that their URLs exist, and submits the review as a COMMENT. If anything
-        fails, it reads the review's state: still pending means everything it created is deleted; submitted (GitHub
-        can apply a submit yet return an empty response) means the post succeeded; unreadable means nothing is
-        deleted. On success the posted URLs are written back into the findings file, and a findings file that has
-        been posted is refused next time.
-        With --resume, findings whose IDs are already on the PR are skipped and the rest are posted (as a new
-        review if any need a thread). Links are filled in both ways, editing the earlier findings that point at a
-        newly posted one.
+post    Re-runs the plan and refuses if anything needs attention, or if the PR head or base is no longer the --head or
+        --base the user approved (a push since can move the anchor or fix a finding, and a moved base changes which
+        lines are in the diff, so where a finding is posted). Then creates a pending review on the anchor
+        commit, adds every finding as a thread (or as a top-level PR comment when its file is not in the PR), fills
+        in the links between related findings now that their URLs exist, and submits the review as a COMMENT. If
+        anything fails, it reads the review's state: still pending means everything it created is deleted;
+        submitted (GitHub can apply a submit yet return an empty response) means the post succeeded; unreadable
+        means nothing is deleted. On success the posted URLs are written back into the findings file, and a
+        findings file that has been posted is refused next time.
+        With --resume, findings whose IDs are already on the PR are skipped and the rest are posted as a new
+        review. Links are filled in both ways, editing the earlier findings that point at a newly posted one.
 
 Placement is computed against the reviewed commit. If that commit is still in the PR, the review is pinned to it, so
 line numbers are never recomputed and GitHub shows findings on code changed since as outdated. If the branch was
@@ -51,6 +52,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "pr-comments"))
+from utils import FINDING_ID_PATTERN
 from utils import GH_TIMEOUT_SECONDS
 from utils import HUNK_HEADER_RE
 from utils import ai_review_finding_marker
@@ -195,6 +197,7 @@ class PostedComment:
 class Plan:
     pr_node_id: str
     pr_head: str
+    pr_base: str
     anchor_commit: str
     reviewed_commit_in_pr: bool
     visibility: str
@@ -359,7 +362,15 @@ def _optional_line(raw: dict[str, Any], *, context: str) -> int | None:
         raise InputError(f"{context}: `line` must be an integer or null")
     if not isinstance(value, int):
         raise InputError(f"{context}: `line` must be an integer or null")
+    if value < 1:
+        raise InputError(f"{context}: `line` must be a positive integer or null, not {value}")
     return value
+
+
+def _require_finding_id(finding_id: str, *, context: str) -> str:
+    if re.fullmatch(FINDING_ID_PATTERN, finding_id) is None:
+        raise InputError(f"{context}: finding ID {finding_id!r} may hold only letters, digits, '_' and '-'")
+    return finding_id
 
 
 def _parse_related(raw: dict[str, Any], *, context: str) -> list[Related]:
@@ -372,7 +383,7 @@ def _parse_related(raw: dict[str, Any], *, context: str) -> list[Related]:
             raise InputError(f"{context}: each `related` entry must be an object with `id` and `note`")
         related.append(
             Related(
-                finding_id=_require_str(raw=entry, key="id", context=context),
+                finding_id=_require_finding_id(_require_str(raw=entry, key="id", context=context), context=context),
                 note=_require_str(raw=entry, key="note", context=context),
             )
         )
@@ -384,7 +395,9 @@ def _parse_finding(raw: object, *, finding_id: str | None, index: int) -> Findin
     if not isinstance(raw, dict):
         raise InputError(f"{context}: must be an object")
     return Finding(
-        finding_id=_require_str(raw=raw, key="id", context=context) if finding_id is None else finding_id,
+        finding_id=_require_finding_id(
+            _require_str(raw=raw, key="id", context=context) if finding_id is None else finding_id, context=context
+        ),
         file=_require_str(raw=raw, key="file", context=context),
         line=_optional_line(raw, context=context),
         line_commit=_optional_str(raw=raw, key="line_commit", context=context),
@@ -586,6 +599,7 @@ def build_plan(findings_file: FindingsFile) -> Plan:
     return Plan(
         pr_node_id=pull_request["id"],
         pr_head=head,
+        pr_base=base,
         anchor_commit=anchor,
         reviewed_commit_in_pr=reviewed_in_pr,
         visibility=repository["visibility"],
@@ -662,6 +676,7 @@ def _plan_json(*, plan: Plan, findings_file: FindingsFile, resume: bool) -> dict
         "reviewed_commit_in_pr": plan.reviewed_commit_in_pr,
         "anchor_commit": plan.anchor_commit,
         "pr_head": plan.pr_head,
+        "pr_base": plan.pr_base,
         "findings": [
             {
                 "id": p.finding.finding_id,
@@ -872,7 +887,7 @@ def _post(*, plan: Plan, findings_file: FindingsFile, resume: bool) -> dict[str,
     to_post = [p for p in plan.planned if p.finding.finding_id not in already_posted]
     threads = [p for p in to_post if p.placement != "pr_comment"]
     review_id: str | None = None
-    if threads:
+    if to_post:
         review_id = gh_graphql(ADD_REVIEW, {"pullRequestId": plan.pr_node_id, "commitOID": plan.anchor_commit})[
             "addPullRequestReview"
         ]["pullRequestReview"]["id"]
@@ -959,7 +974,15 @@ def render_preview(*, plan: Plan, findings_file: FindingsFile, resume: bool) -> 
         relinked = plan.earlier_findings_to_relink(resume=resume)
         if relinked:
             sections.append(f"Edited to link the new findings (GitHub marks them edited): {', '.join(relinked)}.")
-    if any(p.placement != "pr_comment" for p in to_post):
+            # an edit to a comment already on the PR goes out too, so its new body is shown like a new one
+            for p in plan.planned:
+                if p.finding.finding_id not in relinked:
+                    continue
+                sections += [
+                    f"---\n\n# {p.finding.finding_id} (already posted; edited to this)",
+                    render_finding_body(planned=p, urls=urls, findings_file=findings_file),
+                ]
+    if to_post:
         sections += [
             "---\n\n# Review body",
             render_review_body(planned=to_post, findings_file=findings_file, urls=urls, continued=bool(already_posted)),
@@ -989,9 +1012,27 @@ def cmd_post(args: argparse.Namespace) -> None:
     if findings_file.posted is not None:
         _fail(f"{args.findings_file} was already posted: {findings_file.posted.get('review_url')}")
     plan = build_plan(findings_file)
+    if plan.pr_head != args.head:
+        _fail(
+            f"Not posting; the PR head is now {plan.pr_head}, not the approved {args.head}: the PR changed since "
+            "approval, so the preview may no longer match what would be posted. Run `plan` again and get a new "
+            "approval."
+        )
+    if plan.pr_base != args.base:
+        _fail(
+            f"Not posting; the PR base is now {plan.pr_base}, not the approved {args.base}: a moved base changes which "
+            "lines are in the diff, so where a finding would be posted. Run `plan` again and get a new approval."
+        )
     problems = plan.blocking_problems(resume=args.resume)
     if problems:
         _fail("Not posting; resolve these first (see `plan`):\n- " + "\n- ".join(problems))
+    already_posted = plan.already_posted(resume=args.resume)
+    if not [p for p in plan.planned if p.finding.finding_id not in already_posted]:
+        # no review would be created, so recording the file as posted would only block a real post of it later
+        _fail(
+            "Not posting; no finding in the file is left to post, so there would be no review. "
+            "Add findings, or, after a --resume, check `plan`: every finding is already on the PR."
+        )
     findings_file.posted = _post(plan=plan, findings_file=findings_file, resume=args.resume)
     _write_findings_file(path=args.findings_file, findings_file=findings_file)
     _ = sys.stdout.write(json.dumps(findings_file.posted, indent=2) + "\n")
@@ -1023,6 +1064,16 @@ def main() -> None:
 
     post_parser = subparsers.add_parser("post", help="post the findings as one review")
     _ = post_parser.add_argument("--findings-file", required=True, type=Path)
+    _ = post_parser.add_argument(
+        "--head",
+        required=True,
+        help="the pr_head of the plan the user approved; posting stops if the PR has moved since",
+    )
+    _ = post_parser.add_argument(
+        "--base",
+        required=True,
+        help="the pr_base of the plan the user approved; posting stops if the PR's base has moved since",
+    )
     for sub in (plan_parser, post_parser):
         _ = sub.add_argument(
             "--resume",

@@ -224,9 +224,11 @@ ask. For each file in `rej_files`:
 
 Always add an answers-file entry (`is_answers_file: true`, `resolution_strategy:
 "regenerated"`), so the draft is never empty on a clean update. Its `reason` lists each new
-question's answer and why. Its `confidence` is the lowest confidence among those answers
-(`high` when there were none), so `commit` holds an unapproved answer exactly as it holds an
-unapproved `.rej` resolution.
+question's answer and why, except a `secret: true` question's value: the report is posted on
+the PR, so for that question it says only that the value went in through `--data-file`, and
+`description` doesn't name the value either. Its `confidence` is the lowest confidence among
+those answers (`high` when there were none), so `commit` holds an unapproved answer exactly
+as it holds an unapproved `.rej` resolution.
 
 A clean update's draft, for the shape (field names and allowed values are in
 `report.schema.json`; `commit` and `report` name any field that's wrong):
@@ -292,7 +294,8 @@ Build the report from the draft to match `report.schema.json` (`schema_version: 
 `operation: "copier-update"`):
 
 - `project`: `git remote get-url origin`.
-- `project_commit`: `{sha, name}` of HEAD before the update commit.
+- `project_commit`: `{sha, name}` of HEAD before the update commit. `report` lists the commits after it as the
+  update's own (`commits`, shown on the PR comment), so run `report` before anything else is committed.
 - `copier`: `src_path`, `answers_file`, `from_version`/`to_version`, `copier_version`,
   `answers_changed` from the `update` output; `to_commit.name = TO_REF`; `conflict_mode: "rej"`.
 - `resolved_by`: the model you are.

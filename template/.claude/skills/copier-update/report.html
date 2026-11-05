@@ -238,8 +238,14 @@ but if the change should be shared with other projects, please backport it to th
 
         const c = R.copier || {};
         const res = R.resolutions || [];
+        // a reject still pending isn't resolved, whatever status the draft gave it
+        const effectiveStatus = (r) => {
+          if (r.rej_file?.disposition === "pending" && (!r.status || r.status === "resolved" || r.status === "skipped"))
+            return "partially_resolved";
+          return r.status || "resolved";
+        };
         const review = res.filter((r) => r.needs_review);
-        const unresolved = res.filter((r) => r.status && r.status !== "resolved" && r.status !== "skipped");
+        const unresolved = res.filter((r) => effectiveStatus(r) !== "resolved" && effectiveStatus(r) !== "skipped");
 
         let h = `<h1>Copier update report</h1>
   <div class="sub">${esc(R.project || "")}${R.resolved_at ? " · " + esc(R.resolved_at) : ""}${R.resolved_by ? " · " + esc(R.resolved_by) : ""}</div>
@@ -273,7 +279,7 @@ but if the change should be shared with other projects, please backport it to th
           h += `<article class="card">
       <header>
         <span class="name">${esc(r.filename)}</span>
-        ${badge(r.status || "resolved", statusCls(r.status))}
+        ${badge(effectiveStatus(r), statusCls(effectiveStatus(r)))}
         ${r.conflict_type ? badge(r.conflict_type, "info") : ""}
         ${r.resolution_strategy ? badge(r.resolution_strategy, "info") : ""}
         ${r.confidence ? badge(r.confidence + " confidence", confCls(r.confidence)) : ""}
@@ -301,7 +307,7 @@ but if the change should be shared with other projects, please backport it to th
       ${r.related_issues?.length ? row("Issues", r.related_issues.map(esc).join(", ")) : ""}
       ${
         rj
-          ? `<details><summary>.rej ${esc(rj.path || "")} — ${rj.hunk_count ?? "?"} hunk(s)${rj.disposition ? " · " + esc(rj.disposition) : ""}${rj.truncated ? " · TRUNCATED" : ""}</summary>
+          ? `<details><summary>.rej ${esc(rj.path || "")} — ${esc(String(rj.hunk_count ?? "?"))} hunk(s)${rj.disposition ? " · " + esc(rj.disposition) : ""}${rj.truncated ? " · TRUNCATED" : ""}</summary>
         <pre>${esc(rj.encoding === "base64" ? "(base64) " + rj.contents : rj.contents)}</pre>
         ${rj.sha256 ? `<div class="row"><b>sha256</b> <code>${esc(rj.sha256)}</code> · ${esc(rj.byte_size)} bytes</div>` : ""}
       </details>`

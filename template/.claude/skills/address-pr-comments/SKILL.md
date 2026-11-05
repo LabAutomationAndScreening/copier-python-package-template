@@ -35,7 +35,7 @@ With `--checkout <path>` (e.g. `/address-pr-comments 42 --checkout /abs/path/to/
 .claude/skills/address-pr-comments/verify_env.py [--pr <number>] [--checkout <path>]
 ```
 
-Without `--pr` it detects the PR from the current branch. It prints `repo_root`, `has_remote`, `branch`, `on_protected_branch`, `dirty` and `pr` (`{number, state, title}` or `null`).
+Without `--pr` it detects the PR from the current branch. It prints `repo_root`, `has_remote`, `branch`, `on_protected_branch`, `dirty` and `pr` (`{number, state, title, headRefName}` or `null`).
 
 Stop if:
 - `has_remote` is false: "This skill requires a GitHub remote. Please add one with `git remote add origin <url>` first."
@@ -43,14 +43,16 @@ Stop if:
 - `dirty` is true: "Please commit or stash your changes first." (Not with `--resume`; see [Resume Mode](#resume-mode).)
 - `pr` is `null`: ask for a PR number and re-run with `--pr`.
 - `pr.state` isn't `OPEN`: tell the user it must be open.
+- `pr.headRefName` differs from `branch`: "Please check out the PR's branch (`<headRefName>`) first." A fix committed on another branch would be pushed there, and its reply would link a commit that isn't on this PR.
 
 ### Resume Mode
 
-With `--resume` (e.g. `/address-pr-comments 42 --resume`), uncommitted changes and unpushed commits are leftovers from an earlier run, not a reason to stop. Gather this inventory first:
+With `--resume` (e.g. `/address-pr-comments 42 --resume`), uncommitted changes and unpushed commits may be leftovers from an earlier run, so they aren't a reason to stop. Gather this inventory first:
 
 | Source | Command |
 |--------|---------|
 | Unpushed commits | `git log --oneline @{u}..HEAD` |
+| Uncommitted changes | `git status --short` |
 | Reply drafts | `ls <repo_root>/tmp/pr-reply-*.txt` |
 | In-progress bd issues | `bd list --status in_progress --json` |
 | Unresolved threads | pr-comments' Read, actionable threads |
@@ -61,8 +63,10 @@ Classify each reply draft:
 - **Finalized:** approved but not posted. With a matching unpushed commit it's waiting to be posted; without one it's an orphan, so ask.
 - **Its comment is no longer unresolved:** an orphan (someone resolved it). Ask whether to discard it.
 
-Ask with AskUserQuestion, listing the inventory in the `question` field (the commits, each draft and its class, the bd issues), then "How to proceed?". Options:
-- **Resume all**: Phase 2 for drafts with placeholders, then `push_and_post.py` for the commits and finalized drafts; close the in-progress bd issues; discard orphans after confirming. Start verifiers for replies awaiting a verdict ([Step 4b](#step-4b-verify-replies-to-ai-review-findings)).
+Classify each uncommitted path as a **leftover**, the change a placeholder draft's comment was being given, or **unrelated**, anything else. `commit_for_comment.py` commits a path's whole content, so an unrelated edit in a path a leftover touches would go into that commit too: such a path counts as unrelated.
+
+Ask with AskUserQuestion, listing the inventory in the `question` field (the commits, each uncommitted path and its class, each draft and its class, the bd issues), then "How to proceed?". Options:
+- **Resume all**: Phase 2 for drafts with placeholders, committing only leftover paths (unrelated ones stay uncommitted and are named in the report), then `push_and_post.py` for the commits and finalized drafts; close the in-progress bd issues; discard orphans after confirming. Start verifiers for replies awaiting a verdict ([Step 4b](#step-4b-verify-replies-to-ai-review-findings)).
 - **Cherry-pick**: go through each item, asking keep, drop or re-enter.
 - **Discard drafts, keep commits**: delete only the reply files, then start Phase 1 fresh.
 - **Abort**: change nothing.
@@ -94,9 +98,11 @@ If there are no comments, say so, and stop once any verifiers started here have 
 
 ### Step 2b: Triage — read every comment before deciding on any
 
-Comments interact: one fix can settle another comment, make it moot, change what its fix should be, or conflict with it. Read them all, with the code they point at, and work out those relationships, starting from each `ai_review.related`. For a comment with `line_changed: true`, compare the code it was made on (`git show <original_commit_id>:<path>`, around `original_line`) with today's: if a change already addresses it, it's a candidate for "Reply only" with that commit. CodeRabbit resolves only threads it sees fixed, so a thread where it accepted a decline stays open. When a CodeRabbit thread's last reply is CodeRabbit accepting an earlier answer and asking nothing new, list the thread in the triage question below as already addressed, with that reply as the evidence. Treat a disputed finding's objection as part of the comment.
+CodeRabbit resolves only threads it sees fixed, so a thread where it accepted a decline or a deferral stays open. When a CodeRabbit thread's last reply is CodeRabbit accepting an earlier answer and asking nothing new, it's settled: it gets no Phase 1 decision and no reply, and the report lists it with that reply as the evidence. A closing offer to open a follow-up issue is not something new. Set these threads aside before anything else, however many comments there are; when none is left, say so and go to the report ([Step 5](#step-5-report-completion)).
 
-With two or more comments, ask with AskUserQuestion. The `question` field gives the groups of related comments (one line each on how they relate), comments that look already addressed (with evidence), and a proposed order with root causes first, then "Process the comments in this order?". Options: **Use this order**, **Change the order**, **Original order**. Number the comments in the chosen order.
+Comments interact: one fix can settle another comment, make it moot, change what its fix should be, or conflict with it. Read them all, with the code they point at, and work out those relationships, starting from each `ai_review.related`. For a comment with `line_changed: true`, compare the code it was made on (`git show <original_commit_id>:<path>`, around `original_line`) with today's: if a change already addresses it, it's a candidate for "Reply only" with that commit. Treat a disputed finding's objection as part of the comment.
+
+With two or more comments, ask with AskUserQuestion. The `question` field gives the settled CodeRabbit threads set aside above, the groups of related comments (one line each on how they relate), comments that look already addressed (with evidence), and a proposed order with root causes first, then "Process the comments in this order?". Options: **Use this order**, **Change the order**, **Original order**. Number the comments in the chosen order.
 
 ### Step 3: Phase 1 — Collect Decisions
 
@@ -150,8 +156,8 @@ For each comment:
 Phase 2 drains the queue: once at the end of Phase 1, or at each "Flush queue now". Within a batch, in this order:
 
 1. **For each queued code change:**
-   - **Plan it.** Invoke the `Skill` tool with `skill: "create-issues"`, passing the comment and the agreed change as `args`, and follow it to create the bd issue (why, design, Given/When/Then acceptance criteria). Mark the issue in progress and export bd. Skip this for a trivial change, one with no design to record and no behaviour to assert (a code comment, a TODO, a one-line docs fix): it gets no bd issue, and is made directly.
-   - **Make the change.**
+   - **Plan it** (not with `--checkout`; see [Another repo's checkout](#another-repos-checkout)). Invoke the `Skill` tool with `skill: "create-issues"`, passing the comment and the agreed change as `args`, and follow it to create the bd issue (why, design, Given/When/Then acceptance criteria). Mark the issue in progress and export bd. Skip this for a trivial change, one with no design to record and no behaviour to assert (a code comment, a TODO, a one-line docs fix): it gets no bd issue, and is made directly.
+   - **Make the change.** With `--checkout`, make it and check it as [Another repo's checkout](#another-repos-checkout) says, in place of the three cases below.
      - **No behaviour to assert** (docs, markdown, comments, config, unharnessed shell scripts): make it directly. Don't invoke `red`, `green` or `refactor`, and don't invent a test for it.
      - **Tests only**: skip `red`, `green` and `refactor`, since there's no failing test to drive, but check the tests. A new or tightened test of behaviour that already works must be shown to fail: temporarily break the code it guards, see it fail for the right reason, then restore the code exactly. `git diff` must show only the test change. For a test refactor, the tests you touched must pass.
      - **Testable code**: work in cycles of `red`, then `green`, then `refactor`, each a real `Skill` tool call with the bd issue ID and the acceptance criterion as `args`, until every criterion is met. Those skills carry this project's own rules, so writing a test or an implementation without the `Skill` call for that phase breaks the workflow.
@@ -198,7 +204,7 @@ First collect every verifier's result. If some are still running, say so and rep
 - comments set aside for the template layer, each with its ID, path, owning template and agreed change;
 - replies posted;
 - verdicts: resolved, accepted but left to another participant, disputed (with URLs), or skipped at the cap;
-- comments skipped or left open.
+- comments skipped or left open, including settled CodeRabbit threads (with the reply that settled each).
 
 If any reply was disputed, ask whether to go through the disputed threads now, listing each finding and the objection in one line. On yes, re-run [Step 2](#step-2-fetch-pr-comments), since they're back in its output, and continue from Step 2b.
 

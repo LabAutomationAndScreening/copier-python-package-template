@@ -58,7 +58,12 @@ def _git_output(*args: str, cwd: Path) -> str:
 
 
 def _reply_files(*, repo_root: Path, comment_ids: list[int]) -> list[Path]:
-    """Return the reply files to link, failing before anything is committed if one is missing or already linked."""
+    """Return the reply file of each comment the commit settles, checking them all before anything is committed.
+
+    Each must exist, since its reply is approved before the commit, and must still hold a [COMMIT LINK] placeholder
+    outside code to fill: one without has been linked already, by an earlier run of this commit. Every problem is
+    reported at once, and nothing is committed while there is one.
+    """
     problems: list[str] = []
     files: list[Path] = []
     for comment_id in comment_ids:
@@ -92,8 +97,11 @@ def _commit(*, repo_root: Path, files: list[str], message: str) -> str:
         _fail(f"git commit did not finish within {COMMIT_TIMEOUT_SECONDS}s. Check `git log -1` before running again.")
     after = _git_output("rev-parse", "HEAD", cwd=repo_root)
     if result.returncode != 0:
+        # git leaves --files staged when a hook fails; unstaged, they pass the guard above when this is run again
+        _ = run(["git", "reset", "-q", "--", *files], cwd=repo_root)
         _fail(f"Nothing committed: git commit failed (a pre-commit hook, most likely):\n{result.stdout}{result.stderr}")
     if after == before:
+        _ = run(["git", "reset", "-q", "--", *files], cwd=repo_root)
         _fail(f"Nothing committed: HEAD did not move.\n{result.stdout}{result.stderr}")
     return after
 
@@ -114,23 +122,31 @@ def _link(*, link: str, reply_files: list[Path]) -> tuple[list[str], list[str]]:
 
 
 def _close_bd_issue(*, bd_root: Path, issue_id: str, commit: str, reply_file: Path) -> list[str]:
-    shown = run(["bd", "show", issue_id, "--json"], cwd=bd_root)
+    # the commit already exists, so a bd call that times out is reported under errors, never raised: exit 1 has to
+    # keep meaning nothing was committed
+    try:
+        shown = run(["bd", "show", issue_id, "--json"], cwd=bd_root)
+    except subprocess.TimeoutExpired:
+        return [f"bd show {issue_id} timed out; record the commit on the issue and close it by hand"]
     if shown.returncode != 0:
         return [f"bd show {issue_id}: {shown.stderr.strip()}"]
     description = json.loads(shown.stdout)[0].get("description") or ""
     reply = reply_file.read_text(encoding="utf-8").strip()
     updated = f"{description}\n\ncommit: {commit}\nreply: {reply}".strip()
-    errors: list[str] = []
+    # each step needs the one before it: an issue closed without its commit and reply recorded would look settled
     steps: list[tuple[list[str], str | None]] = [
         (["bd", "update", issue_id, "--stdin", "--json"], updated),
         (["bd", "close", issue_id, "--reason", "Addressed in PR review", "--json"], None),
         (["bd", "export", "-o", str(BD_EXPORT_PATH)], None),
     ]
     for command, stdin in steps:
-        result = run(command, cwd=bd_root, stdin=stdin)
+        try:
+            result = run(command, cwd=bd_root, stdin=stdin)
+        except subprocess.TimeoutExpired:
+            return [f"{' '.join(command[:3])} timed out; finish this step and the ones after it by hand"]
         if result.returncode != 0:
-            errors.append(f"{' '.join(command[:3])}: {result.stderr.strip()}")
-    return errors
+            return [f"{' '.join(command[:3])}: {result.stderr.strip()}"]
+    return []
 
 
 def main() -> None:

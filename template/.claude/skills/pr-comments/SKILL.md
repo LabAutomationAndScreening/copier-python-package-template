@@ -17,7 +17,8 @@ repo's PR needs a stored login: if `gh auth status` shows none, ask the user to 
 `env -u GITHUB_TOKEN -u GH_TOKEN gh auth login --hostname github.com --git-protocol https --web`.
 `--repo OWNER/NAME` names the PR's repo; without it, the current directory's `origin` remote.
 In place of `--repo`, `--checkout <path>` runs as if from that clone of another repo: the PR
-belongs to its `origin` remote, and `read.py` works out `current_line` at its HEAD.
+belongs to its `origin` remote, and `read.py` works out `current_line` at its HEAD. A file path
+you pass still resolves against the directory you run in.
 
 ## Read
 
@@ -37,7 +38,9 @@ with something to answer:
   have no inline thread: follow-ups, nitpicks, outside-diff comments).
 - `url`, `author`, `author_is_bot`, `body`, `created_at`; `body_text`, the body with the
   reviewer's block of instructions for AI agents, HTML comments and HTML tags removed, code spans
-  and fenced blocks untouched, so a comment can be quoted without stripping anything yourself.
+  and fenced blocks untouched, so a comment can be quoted without stripping anything yourself. The
+  one exception: a whole machinery block quoted at the start of a line inside a fenced block is
+  removed like a real one.
 - `path`, `line`, `subject_type` (`line`, or `file` for a comment on a whole file). Once a
   later commit changes the commented line, `outdated` is true and `line` falls back to
   `original_line`, a line in `original_commit_id`.
@@ -87,9 +90,10 @@ posted, and changes and posts nothing.
 
 A reply about a commit links it: write `[COMMIT LINK]` where the commit goes and pass
 `--commit <full sha>`, which fills it with `[abc1234](https://github.com/OWNER/NAME/pull/N/commits/<sha>)`,
-the PR-scoped view GitHub ties to the PR. A placeholder left without `--commit`, or `--commit`
-with nothing to fill, is refused, unless the file already holds that commit's link, as it does
-after a failed post, so a retry with the same arguments works. To mention the placeholder
+the PR-scoped view GitHub ties to the PR. A `--commit` that isn't one of the PR's pushed
+commits is refused. So is a placeholder left without `--commit`, or `--commit` with nothing to
+fill, unless the file already holds that commit's link, as it does after a failed post, so a
+retry with the same arguments works. To mention the placeholder
 itself, put it in a code span: `[COMMIT LINK]` inside backticks or a fenced block is text and
 stays as written.
 

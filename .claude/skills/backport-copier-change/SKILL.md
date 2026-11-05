@@ -36,7 +36,7 @@ $BP checkout --branch B --path P [--repo OWNER/NAME]       # clone or fetch, cle
 $BP checkout --branch B --path P --worktree-of <origin checkout>   # the originating repo: a new worktree
 $BP behind --checkout P [--parent-checkout P2]   # `_commit` against the parent template's newest tag
 $BP behind --repo OWNER/NAME         # the same, read from its default branch: no checkout needed
-$BP push --checkout P --chain <chain.json>   # check commit messages if public, push, print the full head SHA
+$BP push --checkout P --chain <chain.json>   # check commit messages and changes if public, push, print the full head SHA
 $BP net-diff --checkout P            # net change after a copier pull; only_commit_changed for re-pins
 $BP ci --repo OWNER/NAME --sha SHA  # wait for every CI run on that commit, push and pull_request alike
 $BP scan --chain <chain.json> --repo R --file F   # private repo names F would leak into public R
@@ -46,7 +46,7 @@ $BP ai-review --repo R --pr N --checkout P        # every configured AI reviewer
 $BP merge-command --repo R --pr N --checkout P   # refuses while the branch is behind its base; else the commands that mark the PR ready and merge it, in order
 $BP tag --repo R --pr N              # wait for the merge, then for the tag on the merge commit
 $BP delete-branch --repo R --branch B --checkout P --chain F --downstream D1 --downstream D2   # once every child is re-pinned; one --downstream per child
-$BP update-branch --checkout P --branch B [--finish]   # merge the default branch in and push; conflicts list each file's branch commits, --finish stages the resolved files
+$BP update-branch --checkout P --branch B --chain <chain.json> [--finish]   # merge the default branch in and push; conflicts list each file's branch commits, --finish stages the resolved files
 $BP cleanup --worktree P             # remove a clean, fully pushed worktree
 ```
 
@@ -195,6 +195,11 @@ resumes the pushed branch (see Resuming).
 
 ### Step 4: Make the change in the layer
 
+A file copied up from the originating repo carries the copier banner of the template that
+placed it: strip it, since the layer's own copy has none and copier adds it again downstream.
+Shebang scripts carry it at the end of the file, other files at the top. Prove the strip by
+comparing every file the change doesn't touch byte for byte against the layer's copy.
+
 Edit, then prove the change before committing it: render the layer the way its CI does (its
 workflow names the `copier copy` flags, the `tests/copier_data/*.yaml` data files and any
 `--data` it passes: `uv run copier copy --trust --skip-tasks --defaults --vcs-ref HEAD --data-file <data file> . <scratchpad>/render`)
@@ -204,8 +209,9 @@ run the repo's hooks, and commit in its commit style (its `commit` skill if it h
 two commits. Then `$BP push --checkout <checkout> --chain <chain.json>` and
 `$BP ci --repo <layer> --sha <sha from push>`.
 
-`passed` is the verdict. `failed_jobs` need a fix (see Rules: stop for the user).
-`not_started_jobs` never got a runner (`not_started_reasons` says why, such as a spent Actions
+`passed` is the verdict. `failed_jobs` need a fix (see Rules: stop for the user), and so do
+`failed_runs`, runs that failed before creating any job, such as on an invalid workflow file
+(open the run's URL for GitHub's error). `not_started_jobs` never got a runner (`not_started_reasons` says why, such as a spent Actions
 budget): there is nothing to fix, so tell the user, and once they say it's sorted,
 `gh run rerun <id> --failed` and run `ci` again.
 
@@ -219,8 +225,8 @@ For each next repo in the chain file's order, each pulling its own parent templa
    commit, so the change's pull commit carries only the change. When `latest_tag_lacks_pin`
    is true, the parent released a tag after this repo pinned its branch, and an update to
    that tag would drop the change: propose merging the parent's default branch into its
-   branch instead (`update-branch` on the parent's checkout), then `ci`, and pull that head
-   here with `--ref`.
+   branch instead (`update-branch` on the parent's checkout, with `--chain`), then `ci`, and
+   pull that head here with `--ref`.
 2. Pull the change: copier-update with `--ref <sha from the parent's push>`, one pull for all
    of the parent's commits. Every upstream commit is pulled, even one that renders no file
    differently here: `net-diff` then shows `only_commit_changed`, which is the proof it renders
@@ -257,8 +263,7 @@ For each repo:
 
 1. **Draft PR.** Just before opening it, fill the repo's PR template
    (`.github/pull_request_template.md`) into `<checkout>/tmp/pr-body.md`, linking the upstream
-   PRs, and claim only what is verified by then: CI results and the checks you ran are the
-   evidence; build no demos unless the user asks. `$BP pr-command` checks it and prints the
+   PRs. `$BP pr-command` checks it and prints the
    `gh pr create --draft …` command: run it. Then post each copier-update report this repo's
    pulls wrote (`<checkout>/tmp/copier-update-report-*.json`, oldest first), so a reviewer
    sees what each hand merge kept and left out: after `scan` in a public repo, one
@@ -321,9 +326,9 @@ top, one level at a time:
    every open thread, since a reviewer may have written since the last look and a merge never
    starts over an unread finding, and refresh the description (Step 6.1). Then
    `$BP merge-command --repo R --pr N --checkout <checkout>`: while the branch is behind its
-   base it refuses, so run `update-branch` on the checkout, `ci` on the new head, and the
-   pre-merge check again. Run its `commands` in order, each as its own command, and
-   start `$BP tag --repo R --pr N` in the background: it confirms the merge, then waits for
+   base it refuses, so run `update-branch` on the checkout (with `--chain`), `ci` on the new
+   head, and the pre-merge check again. Run its `commands` in order, each as its own command,
+   and start `$BP tag --repo R --pr N` in the background: it confirms the merge, then waits for
    the tag. Pass `--merge-only` for a repo with no tag-on-merge workflow (often a project).
 2. **Re-pin its children** as soon as a repo's tag lands: copier-update with no `--ref`, then
    `net-diff`. `only_commit_changed` must be true; if not, stop and show the user what else
@@ -339,12 +344,14 @@ top, one level at a time:
 
 After its PR merges:
 
-1. `$BP update-branch --checkout <origin checkout> --branch <feature branch>` merges the
-   default branch into the feature branch and pushes. When it refuses or reports `conflicts`,
-   its output says what to do; pass `--allow-unpushed` only if the user says the unpushed
-   commits belong on the branch. For each conflicted file, `branch_commits` lists the feature
+1. `$BP update-branch --checkout <origin checkout> --branch <feature branch> --chain <chain.json>`
+   merges the default branch into the feature branch and pushes. When it refuses or reports
+   `conflicts`, its output says what to do; pass `--allow-unpushed` only if the user says the
+   unpushed commits belong on the branch. Expect a conflict on every file this backport copied up:
+   main's copy, pulled down the chain, carries the copier banner and the branch's doesn't (an
+   add/add conflict for a new file). For each conflicted file, `branch_commits` lists the feature
    branch's own commits that touched it: if any came after the backport copied the file, take
-   main's side (`git checkout --theirs -- <file>`) and re-apply those commits on it
+   main's side (`git checkout --theirs -- <file>`) and re-apply those commits on it, oldest first as listed
    (`git show <sha> -- <file> | git apply`); else main's side alone; a hook-regenerated file
    (the devcontainer hash) takes either. Show the user the resolution per file, then `--finish`,
    which stages the resolved files, commits and pushes.

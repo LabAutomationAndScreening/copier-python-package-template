@@ -38,9 +38,6 @@ from utils import enter_checkout
 from utils import gh_rest
 from utils import owner_repo_from_remote
 
-# a reply can link a commit as .../pull/<pr>/commits/<sha>, .../pull/<pr>/changes/<sha> (GitHub serves both views) or
-# a plain .../commit/<sha>
-_LINKED_COMMIT_RE = re.compile(r"/(?:changes|commits?)/(?P<sha>[0-9a-f]{40})\b")
 # The verifier runs from the repo root these skills live in, and is given these scripts' commands in its prompt, so
 # that its instructions name no script and cannot go stale when one moves.
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -79,15 +76,20 @@ def _reply_to_judge(thread: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-def _linked_commits(body: str) -> list[str]:
+def _linked_commits(body: str, *, repo: str) -> list[str]:
+    # a reply can link a commit in the PR's repo as .../pull/<pr>/commits/<sha>, .../pull/<pr>/changes/<sha> (GitHub
+    # serves both views) or a plain .../commit/<sha>; a commit in another repo can't be read from the PR's checkout
+    linked_commit_re = re.compile(
+        rf"https://github\.com/{re.escape(repo)}/(?:pull/\d+/(?:changes|commits)|commit)/(?P<sha>[0-9a-f]{{40}})\b"
+    )
     commits: list[str] = []
-    for match in _LINKED_COMMIT_RE.finditer(body):
+    for match in linked_commit_re.finditer(body):
         if match.group("sha") not in commits:
             commits.append(match.group("sha"))
     return commits
 
 
-def _verifier(*, pr: int, thread: dict[str, Any], head: str, checkout: Path | None) -> dict[str, Any]:
+def _verifier(*, repo: str, pr: int, thread: dict[str, Any], head: str, checkout: Path | None) -> dict[str, Any]:
     ai_review = thread["ai_review"]
     if ai_review is None:
         return {"comment_id": thread["id"], "reason": "not an AI review finding"}
@@ -101,7 +103,7 @@ def _verifier(*, pr: int, thread: dict[str, Any], head: str, checkout: Path | No
     reply = _reply_to_judge(thread)
     if reply is None:
         return {"comment_id": thread["id"], "reason": "no reply to judge"}
-    commits = _linked_commits(reply["body"])
+    commits = _linked_commits(reply["body"], repo=repo)
     lines = [
         f"PR: {pr}",
         f"Finding: {ai_review['finding_id']}, root comment {thread['id']} ({thread['type']})",
@@ -145,7 +147,8 @@ def main() -> None:
     else:
         threads = [
             thread
-            for comment_id in args.comment_id
+            # a repeated id would start two verifiers on one thread, which could post two verdicts
+            for comment_id in dict.fromkeys(args.comment_id)
             for thread in _fetch(pr=args.pr, args=["--thread", str(comment_id)])
         ]
         missing = sorted(set(args.comment_id) - {thread["id"] for thread in threads})
@@ -155,7 +158,7 @@ def main() -> None:
     verifiers: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     for thread in threads:
-        result = _verifier(pr=args.pr, thread=thread, head=head, checkout=checkout)
+        result = _verifier(repo=f"{owner}/{repo}", pr=args.pr, thread=thread, head=head, checkout=checkout)
         if "prompt" in result:
             verifiers.append(result)
         else:
