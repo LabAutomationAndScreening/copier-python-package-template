@@ -653,14 +653,22 @@ def find_conflict_markers(project: Path) -> list[dict[str, Any]]:
     return hits
 
 
+# copier never writes a .rej in these, and they can be huge; a walk that only skipped them afterwards would still read them
+_REJ_WALK_SKIP = frozenset({".git", "node_modules", ".venv"})
+
+
+def _rej_paths(project: Path) -> list[Path]:
+    # a plain walk rather than git's file list: a project that gitignores *.rej must still have its conflicts found
+    found: list[Path] = []
+    for directory, subdirectories, files in project.walk():
+        subdirectories[:] = [d for d in subdirectories if d not in _REJ_WALK_SKIP]
+        found += [directory / name for name in files if name.endswith(".rej")]
+    return sorted(found)
+
+
 def list_rej_files(project: Path) -> list[dict[str, Any]]:
     rejs: list[dict[str, Any]] = []
-    for p in sorted(project.rglob("*.rej")):
-        parts = p.relative_to(project).parts
-        if ".git" in parts:
-            continue
-        if "node_modules" in parts:
-            continue
+    for p in _rej_paths(project):
         rel = p.relative_to(project).as_posix()
         rejs.append(
             {
@@ -1188,7 +1196,7 @@ def _parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="verb", required=True)
 
     def verb(
-        name: str, fn: Callable[[argparse.Namespace], dict[str, Any]], *, answers: bool = False, remote: bool = False
+        *, name: str, fn: Callable[[argparse.Namespace], dict[str, Any]], answers: bool = False, remote: bool = False
     ) -> argparse.ArgumentParser:
         sp = sub.add_parser(name)
         sp.add_argument("project", nargs="?", default=".")
@@ -1202,22 +1210,22 @@ def _parser() -> argparse.ArgumentParser:
         sp.set_defaults(fn=fn)
         return sp
 
-    _ = verb("find-answers", cmd_find_answers)
-    br = verb("branch", cmd_branch)
+    _ = verb(name="find-answers", fn=cmd_find_answers)
+    br = verb(name="branch", fn=cmd_branch)
     br.add_argument("--ref", default="latest", help="the template ref, for the default branch name")
     br.add_argument("--name", default=None, help="branch name (default: chore/template-<ref>)")
     br.add_argument("--worktree", default=None, help="create the branch in a new worktree at this path")
-    refs = verb("refs", cmd_refs, answers=True, remote=True)
+    refs = verb(name="refs", fn=cmd_refs, answers=True, remote=True)
     refs.add_argument("--count", type=int, default=3, help="recent branches besides the default")
-    nq = verb("new-questions", cmd_new_questions, answers=True, remote=True)
+    nq = verb(name="new-questions", fn=cmd_new_questions, answers=True, remote=True)
     nq.add_argument("--ref", required=True)
-    up = verb("update", cmd_update, answers=True, remote=True)
+    up = verb(name="update", fn=cmd_update, answers=True, remote=True)
     up.add_argument("--ref", default=None, help="template ref; omitted means copier's default, the latest tag")
     up.add_argument("--data", action="append", default=[], metavar="KEY=VALUE")
     up.add_argument("--data-file", default=None)
-    _ = verb("conflicts", cmd_conflicts)
-    _ = verb("lint", cmd_lint)
-    cm = verb("commit", cmd_commit)
+    _ = verb(name="conflicts", fn=cmd_conflicts)
+    _ = verb(name="lint", fn=cmd_lint)
+    cm = verb(name="commit", fn=cmd_commit)
     cm.add_argument("--draft", required=True, help="the resolution draft; its confidences gate the commit")
     cm.add_argument(
         "--approved", action="append", default=[], metavar="FILE", help="a below-high resolution the user decided on"
@@ -1230,15 +1238,15 @@ def _parser() -> argparse.ArgumentParser:
         metavar="HOOK",
         help="a hook id `lint` still lists in failed_hooks; every other hook runs on the commit",
     )
-    rp = verb("report", cmd_report)
+    rp = verb(name="report", fn=cmd_report)
     rp.add_argument("draft")
-    pr = verb("pr", cmd_pr, remote=True)
+    pr = verb(name="pr", fn=cmd_pr, remote=True)
     pr.add_argument("--title", required=True)
     pr.add_argument("--body-file", required=True, help="the filled-in PR template")
     pr.add_argument("--base", default=None)
     pr.add_argument("--remote", default="origin")
     pr.add_argument("--ready", action="store_true", help="open it ready for review instead of as a draft")
-    cm_report = verb("comment-report", cmd_comment_report, remote=True)
+    cm_report = verb(name="comment-report", fn=cmd_comment_report, remote=True)
     cm_report.add_argument("--report", required=True, help="the report JSON from `report`")
     cm_report.add_argument("--remote", default="origin")
 
