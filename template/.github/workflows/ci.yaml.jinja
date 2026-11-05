@@ -186,6 +186,8 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: {% endraw %}{{ full_repo_url | replace("https://github.com/", "") }}{% raw %}{% endraw %}{% endif %}{% raw %}
 
+      - uses: ./.github/actions/confirm-git-tree-clean
+
 {% endraw %}{% if not deploy_as_executable %}{% raw %}
   build:
     needs:
@@ -228,6 +230,8 @@ jobs:
           name: python-package-distributions
           path: dist/
           if-no-files-found: error
+
+      - uses: ./.github/actions/confirm-git-tree-clean
 {% endraw %}{% endif %}{% raw %}
 
 {% endraw %}{% if deploy_as_executable %}{% raw %}  executable:
@@ -275,7 +279,9 @@ jobs:
         with:
           name: exe-${{ matrix.os }}-${{ matrix.python-version }}
           path: dist/
-          if-no-files-found: error{% endraw %}{% endif %}{% raw %}
+          if-no-files-found: error
+
+      - uses: ./.github/actions/confirm-git-tree-clean{% endraw %}{% endif %}{% raw %}
 
 
 {% endraw %}{% if create_docs %}{% raw %}
@@ -313,6 +319,8 @@ jobs:
       - name: Build docs
         working-directory: ./docs
         run: uv run make html SPHINXOPTS="-W"
+
+      - uses: ./.github/actions/confirm-git-tree-clean
 {% endraw %}{% endif %}{% raw %}
 
   workflow-summary:
