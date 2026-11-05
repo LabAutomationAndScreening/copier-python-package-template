@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier
-_commit: v0.4.4-108-g94bc26ee
+_commit: v0.4.4-115-g0883135b
 _src_path: gh:LabAutomationAndScreening/copier-base-template.git
 copier_answers_directory: .config
 description: Copier template for creating Python libraries and executables
