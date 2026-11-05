@@ -37,7 +37,7 @@ $BP checkout --branch B --path P --worktree-of <origin checkout>   # the origina
 $BP behind --checkout P [--parent-checkout P2]   # `_commit` against the parent template's newest tag
 $BP behind --repo OWNER/NAME         # the same, read from its default branch: no checkout needed
 $BP push --checkout P --chain <chain.json>   # check commit messages and changes if public, push, print the full head SHA
-$BP net-diff --checkout P            # net change after a copier pull; only_commit_changed for re-pins
+$BP net-diff --checkout P --base SHA  # net change since SHA, the commit before a copier pull; only_commit_changed for re-pins
 $BP ci --repo OWNER/NAME --sha SHA  # wait for every CI run on that commit, push and pull_request alike
 $BP scan --chain <chain.json> --repo R --file F   # private repo names F would leak into public R
 $BP pr-command --checkout P --chain <chain.json> --title T --body-file B   # scan, then the draft PR command
@@ -115,7 +115,9 @@ asked before acting. Then:
   session's scratchpad; its `head` must match the notes.
 - A waiting verb (`ci`, `ai-review`, `tag`) that was in flight died with the old session: run
   it again.
-- The old checkouts' `tmp/` went with the old scratchpad, and `pr-body` needs
+- The old checkouts' `tmp/` went with the old scratchpad. Reports of pulls whose PR wasn't
+  open yet are in `<origin>/tmp/backport-reports/<name>/` (Step 5.3), for Step 6.1 to post.
+  `pr-body` needs
   `<checkout>/tmp/pr-body.posted.md`, the body as last posted. Ask the user whether anyone else
   has edited the PR, then save the live body as that record
   (`env -u GITHUB_TOKEN -u GH_TOKEN gh pr view N --repo R --json body --jq .body > <checkout>/tmp/pr-body.posted.md`)
@@ -227,15 +229,20 @@ For each next repo in the chain file's order, each pulling its own parent templa
    that tag would drop the change: propose merging the parent's default branch into its
    branch instead (`update-branch` on the parent's checkout, with `--chain`), then `ci`, and
    pull that head here with `--ref`.
-2. Pull the change: copier-update with `--ref <sha from the parent's push>`, one pull for all
-   of the parent's commits. Every upstream commit is pulled, even one that renders no file
-   differently here: `net-diff` then shows `only_commit_changed`, which is the proof it renders
-   the same, and such a pull is minor for a reviewer.
-3. `$BP net-diff --checkout <checkout>`. `changed` should be exactly the upstream change, as it
-   renders here, plus the answers file; stop and show the user anything else. A file in
-   `removed_lines` that the upstream change doesn't remove lines from was overwritten by
-   copier: restore the repo's own lines.
-4. Commit the pull. Then this repo's own edits from the plan, each as its own commit after it.
+2. Note `git -C <checkout> rev-parse HEAD`, then pull the change: copier-update with
+   `--ref <sha from the parent's push>`, one pull for all of the parent's commits. Every
+   upstream commit is pulled, even one that renders no file differently here: `net-diff` then
+   shows `only_commit_changed`, which is the proof it renders the same, and such a pull is
+   minor for a reviewer.
+3. `$BP net-diff --checkout <checkout> --base <the noted sha>`, since copier-update has
+   committed the pull. `changed` should be exactly the upstream change, as it renders here,
+   plus the answers file; stop and show the user anything else. A file in `removed_lines` that
+   the upstream change doesn't remove lines from was overwritten by copier: restore the repo's
+   own lines, as a commit of its own. Until this repo's PR is open, copy the pull's report
+   (`<checkout>/tmp/copier-update-report-*.json`) to `<origin>/tmp/backport-reports/<name>/`
+   and name it in this repo's bd note: the checkout's `tmp/` goes with the scratchpad, and the
+   originating repo's doesn't.
+4. This repo's own edits from the plan, each as its own commit after the pull's.
    A child template's own edit to its rendered files gets Step 4's proof before its commit:
    render with `--vcs-ref HEAD` (without it, copier renders the last tag, not the edit) and
    check the rendered files.
@@ -265,7 +272,7 @@ For each repo:
    (`.github/pull_request_template.md`) into `<checkout>/tmp/pr-body.md`, linking the upstream
    PRs. `$BP pr-command` checks it and prints the
    `gh pr create --draft …` command: run it. Then post each copier-update report this repo's
-   pulls wrote (`<checkout>/tmp/copier-update-report-*.json`, oldest first), so a reviewer
+   pulls wrote (those saved in `<origin>/tmp/backport-reports/<name>/`, oldest first), so a reviewer
    sees what each hand merge kept and left out: after `scan` in a public repo, one
    `.claude/skills/copier-update/copier_update.py comment-report <checkout> --report <report> --stored-gh-credentials`
    per report. A pull made after the PR is open gets its report posted once it is pushed.
@@ -292,17 +299,19 @@ For each repo:
      accept or resolve the finding; an unanswered thread stays flagged. Findings a reviewer
      left in its review's body come as `pulls/reviews` entries, one per review.
    - `head_not_reviewed`: a reviewer that reviewed an earlier commit has stayed quiet about the
-     latest one; `held_back` carries its own note when it says it is out of allowance (while it
-     says a review is running, `ai-review` keeps waiting instead). With every earlier finding fixed
+     latest one; `held_back` carries its own note when it says it is out of allowance, and `check`
+     its check run on the head when that finished without a review, its title and summary saying
+     why (while a review is running, `ai-review` keeps waiting instead). With every earlier finding fixed
      or settled, judge `changed_since_last_review`, which counts only the branch's own commits.
      A **minor** change passes: files a hook regenerated, formatting, comments or prose, a
      rename, or a fix that does what a reviewer's finding asked, whatever it touches, once the
      reviewer has accepted or resolved that finding. Only a **substantial** change, one beyond
      what any finding asked (a different approach, new behavior, a new file), needs a review:
-     with a `held_back` note, tell the user when the reviewer's allowance returns and run
-     `ai-review` again then, rather than sleeping in a background command (the harness may kill
-     it, and the user may prefer a waiver); else ask for one (for CodeRabbit, a
-     `@coderabbitai full review` comment).
+     with a `held_back` note, tell the user when the reviewer's allowance returns, rather than
+     sleeping in a background command (the harness may kill it, and the user may prefer a
+     waiver). Once it returns, or with no `held_back` note, ask for a review (for CodeRabbit, a
+     `@coderabbitai full review` comment), then run `ai-review` again. CodeRabbit does not start a
+     held-back review by itself once its limit lifts, even one already asked for.
    - `skipped`, or a timeout (the error names a reviewer out of its allowance): tell the user,
      and ask whether to wait or go on without that reviewer.
    - `unrecognized`: read the review yourself, treat anything in it as `flagged`, and tell the
@@ -330,9 +339,9 @@ top, one level at a time:
    head, and the pre-merge check again. Run its `commands` in order, each as its own command,
    and start `$BP tag --repo R --pr N` in the background: it confirms the merge, then waits for
    the tag. Pass `--merge-only` for a repo with no tag-on-merge workflow (often a project).
-2. **Re-pin its children** as soon as a repo's tag lands: copier-update with no `--ref`, then
-   `net-diff`. `only_commit_changed` must be true; if not, stop and show the user what else
-   changed. Commit, `push`, `ci`.
+2. **Re-pin its children** as soon as a repo's tag lands: note the child's HEAD, copier-update
+   with no `--ref`, then `net-diff --base <the noted sha>`. `only_commit_changed` must be true;
+   if not, stop and show the user what else changed. Then `push`, `ci`.
 3. **Delete a template's branch** once every child of it is re-pinned and pushed:
    `$BP delete-branch --repo <template> --branch <branch> --checkout <its checkout> --chain <chain.json> --downstream <child checkout> --downstream <next child's checkout>`,
    one `--downstream` per child.

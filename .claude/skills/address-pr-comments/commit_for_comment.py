@@ -94,7 +94,12 @@ def _commit(*, repo_root: Path, files: list[str], message: str) -> str:
     try:
         result = run(["git", "commit", "-F", "-"], cwd=repo_root, stdin=message, timeout=COMMIT_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired:
-        _fail(f"git commit did not finish within {COMMIT_TIMEOUT_SECONDS}s. Check `git log -1` before running again.")
+        after = _git_output("rev-parse", "HEAD", cwd=repo_root)
+        if after != before:
+            # a post-commit hook ran past the timeout, but git had already made the commit
+            return after
+        _ = run(["git", "reset", "-q", "--", *files], cwd=repo_root)
+        _fail(f"Nothing committed: git commit did not finish within {COMMIT_TIMEOUT_SECONDS}s.")
     after = _git_output("rev-parse", "HEAD", cwd=repo_root)
     if result.returncode != 0:
         # git leaves --files staged when a hook fails; unstaged, they pass the guard above when this is run again
@@ -141,6 +146,8 @@ def _issue_description(*, bd_root: Path, issue_id: str) -> tuple[str, list[str]]
         shown = run(["bd", "show", issue_id, "--json"], cwd=bd_root)
     except subprocess.TimeoutExpired:
         return "", [f"bd show {issue_id} timed out; record the commit on the issue and close it by hand"]
+    except OSError as e:
+        return "", [f"bd could not run ({e}); record the commit on {issue_id} and close it by hand"]
     if shown.returncode != 0:
         return "", [f"bd show {issue_id}: {shown.stderr.strip()}"]
     try:
@@ -172,6 +179,8 @@ def _close_bd_issue(*, bd_root: Path, issue_id: str, commit: str, reply_file: Pa
             result = run(command, cwd=bd_root, stdin=stdin)
         except subprocess.TimeoutExpired:
             return [f"{' '.join(command[:3])} timed out; finish this step and the ones after it by hand"]
+        except OSError as e:
+            return [f"{' '.join(command[:3])} could not run ({e}); finish this step and the ones after it by hand"]
         if result.returncode != 0:
             return [f"{' '.join(command[:3])}: {result.stderr.strip()}"]
     return []
