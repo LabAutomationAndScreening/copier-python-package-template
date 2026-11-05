@@ -68,7 +68,8 @@ Verbs (all print JSON on stdout; errors go to stderr with exit 1):
                                     PR's state: waiting, quiet, held (with until) or needs_action
   status --chain F --branch B       a snapshot of every chain PR, waiting on nothing: its head, CI
                                     checks passed, pending and failed, each AI reviewer's check, and
-                                    how many threads are open, for a status message to quote
+                                    what awaits an answer (inline threads, top-level comments and
+                                    review bodies), for a status message to quote
   merge-command --repo R --pr N --checkout DIR
                                     refuse while the PR's branch is behind its base; else the
                                     commands that mark the draft ready and merge it the way the
@@ -1214,6 +1215,7 @@ def enabled_reviewers(*, checkout: Path, names: list[str]) -> list[ModuleType]:
     return [r for r in REVIEWERS if any((checkout / f).is_file() for f in r.CONFIG_FILES)]
 
 
+PR_COMMENTS_READ = Path(__file__).resolve().parent.parent / "pr-comments" / "read.py"
 _FINDING_KEYS = ("id", "type", "path", "line", "url", "body_text")
 
 
@@ -1223,8 +1225,7 @@ def _reviewer_findings(*, repo: str, pr: str, checkout: Path, reviewer: ModuleTy
     The checkout is the working directory, so each thread's line maps to its HEAD; the read script picks its own
     credentials, the stored login first.
     """
-    read = Path(__file__).resolve().parent.parent / "pr-comments" / "read.py"
-    threads = json.loads(_run(cmd=[str(read), pr, "--repo", repo], cwd=checkout))
+    threads = json.loads(_run(cmd=[str(PR_COMMENTS_READ), pr, "--repo", repo], cwd=checkout))
     findings: list[dict[str, Any]] = []
     for thread in threads:
         if not reviewer.LOGIN.search(thread["author"]):
@@ -1329,11 +1330,12 @@ def _watched_pr(*, reviews: _PrReviews, result: dict[str, Any] | None, settled: 
     time has come), so a finding is never held behind another reviewer's countdown.
     """
     entry: dict[str, Any] = {"pr": reviews.pr, "head": reviews.head}
+    # a settled or waived head is quiet whatever its reviewers are doing, even one that never starts a review
+    if reviews.head in settled:
+        return {**entry, "state": "quiet", "result": result}
     if result is None:
         return {**entry, "state": "waiting"}
     entry["result"] = result
-    if reviews.head in settled:
-        return {**entry, "state": "quiet"}
     if result["verdict"] in _QUIET_VERDICTS:
         return {**entry, "state": "quiet"}
     until = _held_until(reviews=reviews, verdicts=result["reviewers"])
@@ -1406,11 +1408,12 @@ def _check_state(check: dict[str, Any]) -> str:
     # gh lists GitHub Actions jobs and app checks as CheckRun (status, conclusion), commit statuses as StatusContext
     if check.get("__typename") == "StatusContext":
         state = check.get("state") or ""
-        if state == "PENDING":
-            return "pending"
+        if state == "SUCCESS":
+            return "passed"
         if state in _CHECK_FAILURES:
             return "failed"
-        return "passed"
+        # PENDING, or EXPECTED: a required status that hasn't reported yet, so never green
+        return "pending"
     if check.get("status") != "COMPLETED":
         return "pending"
     if (check.get("conclusion") or "") in _CHECK_FAILURES:
@@ -1429,8 +1432,11 @@ def _pr_status(*, repo: str, pr: str) -> dict[str, Any]:
             reviewers[reviewer_checks[name]] = f"{check.get('status')} {check.get('conclusion') or ''}".strip()
             continue
         checks[_check_state(check)].append(name)
-    read = Path(__file__).resolve().parent.parent / "pr-comments" / "read.py"
-    open_threads = len(json.loads(_run(cmd=[str(read), pr, "--repo", repo])))
+    # read.py's default output is everything that awaits an answer: inline threads, top-level comments, review bodies
+    kinds = {"pulls/comments": "threads", "issues/comments": "top_level_comments", "pulls/reviews": "review_bodies"}
+    to_answer = dict.fromkeys(kinds.values(), 0)
+    for entry in json.loads(_run(cmd=[str(PR_COMMENTS_READ), pr, "--repo", repo])):
+        to_answer[kinds[entry["type"]]] += 1
     return {
         "pr": pr,
         "url": view["url"],
@@ -1439,7 +1445,7 @@ def _pr_status(*, repo: str, pr: str) -> dict[str, Any]:
         "head": view["headRefOid"],
         "checks": {"passed": len(checks["passed"]), "pending": checks["pending"], "failed": checks["failed"]},
         "reviewer_checks": reviewers,
-        "open_threads": open_threads,
+        "to_answer": to_answer,
     }
 
 

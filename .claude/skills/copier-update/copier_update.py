@@ -924,6 +924,8 @@ def _scalar_errors(*, value: object, field: dict[str, Any], path: str) -> list[s
     if kind == "string":
         if not isinstance(value, str):
             errors.append(f"{path}: must be a string, not {value!r}")
+        elif len(value) < field.get("minLength", 0):
+            errors.append(f"{path}: needs at least {field['minLength']} character(s), not {len(value)}")
     # bool is an int in Python, but not an integer in the schema
     if kind == "integer":
         if isinstance(value, bool):
@@ -942,9 +944,8 @@ def _field_errors(*, value: object, field: dict[str, Any], path: str, defs: dict
         if len(value) < field.get("minItems", 0):
             errors.append(f"{path}: needs at least {field['minItems']} item(s), not {len(value)}")
         items = _resolved(spec=field.get("items", {}), defs=defs)
-        if "properties" in items:
-            for index, item in enumerate(value):
-                errors += _object_errors(value=item, spec=items, path=f"{path}/{index}", defs=defs)
+        for index, item in enumerate(value):
+            errors += _field_errors(value=item, field=items, path=f"{path}/{index}", defs=defs)
     if "properties" in field:
         errors += _object_errors(value=value, spec=field, path=path, defs=defs)
     return errors
