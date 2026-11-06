@@ -1183,13 +1183,17 @@ def _unreviewed_by_check(
     waited on; once the module's quiet period has passed with still no body, a person has to read the PR. Any other
     conclusion (neutral, skipped, cancelled, failure) means the head went unreviewed, for a reason such as a rate
     limit that the check's title and summary give in the reviewer's own words. That makes the verdict skipped for a
-    reviewer that never reviewed this PR, else head_not_reviewed.
+    reviewer that never reviewed this PR, else head_not_reviewed. While the reviewer's own comment says a review is
+    running, though, that review's check is about to replace this one, so that is waited on too.
     """
     if check["conclusion"] == "success":
         completed = datetime.datetime.fromisoformat(check["completed_at"]).timestamp()
         if time.time() - completed < reviewer.QUIET_AFTER_SECONDS:
             return None
         return {"verdict": "unrecognized", "check": check}
+    # a review asked for again shows as running in the reviewer's comment a moment before its new check run exists
+    if reviewer.still_reviewing(state["bodies"][reviewer.NAME]["comments"]):
+        return None
     held_back = reviewer.held_back(state["comments"][reviewer.NAME])
     last = state["last_reviewed"][reviewer.NAME]
     if last is None:
@@ -1586,6 +1590,16 @@ def _require_remote_tip_merged(*, checkout: Path, branch: str, merged_head: str)
 
 
 def _require_downstream_off_branch(*, checkout: Path, branch: str, downstream: Path) -> str:
+    dirty = _dirty(downstream)
+    if dirty:
+        raise FailError(f"{downstream} has uncommitted changes; commit and push its re-pin first:\n" + "\n".join(dirty))
+    child_branch = _git("symbolic-ref", "--short", "HEAD", cwd=downstream).strip()
+    _ = _attempt(cmd=["git", "fetch", "--quiet", "origin", child_branch], cwd=downstream)
+    if not _has_ref(checkout=downstream, ref=f"origin/{child_branch}"):
+        raise FailError(f"{downstream}'s branch {child_branch} is not on origin; push its re-pin first")
+    unpushed = _git("log", "--oneline", f"origin/{child_branch}..HEAD", cwd=downstream).strip()
+    if unpushed:
+        raise FailError(f"{downstream} has commits not on origin/{child_branch}; push its re-pin first:\n{unpushed}")
     current = _answers_commit(downstream)
     if current is None:
         raise FailError(f"{downstream / ANSWERS} has no _commit")
