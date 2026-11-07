@@ -9,12 +9,6 @@ minimum_pre_commit_version: 4.5.1
 # run `pre-commit autoupdate --freeze` to update all hooks
 default_install_hook_types: [pre-commit, post-checkout]
 repos:
-  # Git-related
-  - repo: https://github.com/jumanjihouse/pre-commit-hooks
-    rev: 38980559e3a605691d6579f96222c30778e5a69e # frozen: 3.0.0
-    hooks:
-      - id: git-dirty
-
   # package management
   - repo: local
     hooks:
@@ -303,6 +297,14 @@ repos:
 
   - repo: local
     hooks:
+      - id: test-name-clause-separator
+        name: separate mid-name Then/When clauses in test names with a double underscore, and start a leading clause with a single one
+        entry: '^\s*(async\s+)?def test_(_|\w*[^_]_(Then|When)_)'
+        language: pygrep
+        files: (^|/)test_[^/]*\.py$
+
+  - repo: local
+    hooks:
       - id: pyrefly
         name: pyrefly
         entry: bash -c "uv run --frozen pyrefly check -c ./.config/pyrefly.toml"
@@ -364,6 +366,15 @@ repos:
         name: merge Claude settings
         entry: bash -c '[[ "${GITHUB_ACTIONS:-}" == "true" || "${CI:-}" == "true" ]] && exit 0; bash .claude/helpers/merge-claude-settings.sh'
         files: ^\.claude/settings/.*\.(json|jsonc)$
+        pass_filenames: false
+        language: system
+
+      - id: check-claude-paths
+        # A skill's or agent's instructions name scripts by path, and an agent types a path as written, so a renamed or
+        # removed file breaks them silently. Any change under .claude/ re-checks every path written in a document there.
+        name: check paths written in Claude documents exist
+        entry: python3 .claude/helpers/check_claude_paths.py
+        files: ^\.claude/
         pass_filenames: false
         language: system
 

@@ -98,3 +98,5 @@ jobs:
         with:
           path: ${{ env.PRE_COMMIT_HOME }}
           key: ${{ env.CACHE_KEY }}
+
+      - uses: ./.github/actions/confirm-git-tree-clean
