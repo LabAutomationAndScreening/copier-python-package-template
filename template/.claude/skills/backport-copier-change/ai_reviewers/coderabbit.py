@@ -8,8 +8,9 @@
 """CodeRabbit's PR review wording.
 
 A review with findings opens "Actionable comments posted: N" and may add "Follow-ups (N)",
-"Nitpick comments (N)", "Outside diff range comments (N)" and "Additional comments: N"
-sections; a review can carry only follow-ups or additional comments, with "Actionable comments
+"Nitpick comments (N)", "Outside diff range comments (N)", "Additional comments: N" and
+"Duplicate comments (N)" (findings an earlier review raised, raised again) sections; a review
+can carry only follow-ups, additional or duplicate comments, with "Actionable comments
 posted: 0" or no actionable line at all. One with none says "No
 actionable comments were generated in the recent review.", and the summary comment says the
 same once it is refreshed for the latest commit. A review that found nothing in the code may
@@ -36,6 +37,7 @@ _FOLLOW_UPS = re.compile(r"Follow-ups \((\d+)\)")
 _NITPICKS = re.compile(r"Nitpick comments \((\d+)\)")
 _OUTSIDE_DIFF = re.compile(r"Outside diff range comments \((\d+)\)")
 _ADDITIONAL = re.compile(r"Additional comments: (\d+)")
+_DUPLICATES = re.compile(r"Duplicate comments \((\d+)\)")
 _PRE_MERGE_SECTION = re.compile(r"^Failed pre-merge checks:\n(.*?)(?:\n\n|\Z)", re.MULTILINE | re.DOTALL)
 _PRE_MERGE_CHECK = re.compile(r"^- ([^:\n]+):", re.MULTILINE)
 _SKIPPED = re.compile(r"Review skipped", re.IGNORECASE)
@@ -60,6 +62,7 @@ def classify(*, reviews: list[str], comments: list[str], head: str) -> dict[str,
         "nitpicks": sum(int(n) for n in _NITPICKS.findall(text)),
         "outside_diff": sum(int(n) for n in _OUTSIDE_DIFF.findall(text)),
         "additional": sum(int(n) for n in _ADDITIONAL.findall(text)),
+        "duplicates": sum(int(n) for n in _DUPLICATES.findall(text)),
     }
     if any(counts.values()):
         return {"verdict": "flagged", **counts}
@@ -117,14 +120,6 @@ def allowance_used_up(bodies: list[str]) -> bool:
     if not bodies:
         return False
     return _ALLOWANCE.search(bodies[-1]) is not None
-
-
-def still_reviewing(comments: list[str]) -> bool:
-    """Return whether CodeRabbit's summary comment, which it rewrites in place, says a review is running now."""
-    for body in comments:
-        if _REVIEWING.search(body) is not None:
-            return True
-    return False
 
 
 def asks_for_review(body: str) -> bool:

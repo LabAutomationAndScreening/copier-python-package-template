@@ -453,20 +453,27 @@ def _install_claude_packages(checkout: Path) -> bool:
     return True
 
 
+def _add_worktree(*, source: Path, path: Path, branch: str, default: str) -> None:
+    if path.exists():
+        raise FailError(f"{path} already exists; reuse it or pick another --path")
+    if _has_ref(checkout=source, ref=f"refs/heads/{branch}"):
+        # resuming: the branch outlives a worktree whose directory went with an earlier session's scratchpad
+        _ = _git("worktree", "prune", cwd=source)
+        _ = _git("worktree", "add", str(path), branch, cwd=source)
+    elif _has_ref(checkout=source, ref=f"refs/remotes/origin/{branch}"):
+        # resuming in a fresh clone of the originating repo, such as a new devcontainer: the branch is only on origin
+        _ = _git("worktree", "add", "--track", "-b", branch, str(path), f"origin/{branch}", cwd=source)
+    else:
+        _ = _git("worktree", "add", "-b", branch, str(path), f"origin/{default}", cwd=source)
+
+
 def cmd_checkout(a: argparse.Namespace) -> dict[str, Any]:
     if a.worktree_of is not None:
         source = Path(a.worktree_of)
         path = Path(a.path)
         _ = _git("fetch", "--quiet", "origin", cwd=source)
         default = _default_branch(source)
-        if path.exists():
-            raise FailError(f"{path} already exists; reuse it or pick another --path")
-        if _has_ref(checkout=source, ref=f"refs/heads/{a.branch}"):
-            # resuming: the branch outlives a worktree whose directory went with an earlier session's scratchpad
-            _ = _git("worktree", "prune", cwd=source)
-            _ = _git("worktree", "add", str(path), a.branch, cwd=source)
-        else:
-            _ = _git("worktree", "add", "-b", a.branch, str(path), f"origin/{default}", cwd=source)
+        _add_worktree(source=source, path=path, branch=a.branch, default=default)
     else:
         path = Path(a.path)
         if path.exists():
@@ -504,15 +511,26 @@ def _base_tag(commit: str) -> str:
     return UNTAGGED_SUFFIX.sub("", commit)
 
 
+# copier-update's release_tags keeps the same tags, the ones copier picks a no-ref update's target from
+_RELEASE_TAG = re.compile(r"^v?\d+(\.\d+)*$")
+
+
 def _latest_tag(repo: str) -> str:
+    """Return the newest release tag: the one a copier update with no ref goes to.
+
+    git's version sort puts `v1.2.0-rc1` ahead of `v1.2.0` and ranks `v` tags apart from unprefixed ones, while copier
+    skips prereleases and compares versions, so this keeps the release-shaped tags and orders them by their numbers.
+    """
     url = f"https://github.com/{repo}.git"
-    tags = [
-        line.split("\t", 1)[1].removeprefix("refs/tags/")
-        for line in _run(cmd=["git", "ls-remote", "--tags", "--refs", "--sort=-v:refname", url]).splitlines()
-    ]
+    tags: list[str] = []
+    for line in _run(cmd=["git", "ls-remote", "--tags", "--refs", url]).splitlines():
+        tag = line.split("\t", 1)[1].removeprefix("refs/tags/")
+        if _RELEASE_TAG.match(tag) is None:
+            continue
+        tags.append(tag)
     if not tags:
-        raise FailError(f"{url} has no tags")
-    return tags[0]
+        raise FailError(f"{url} has no release tags")
+    return max(tags, key=lambda tag: tuple(int(part) for part in tag.removeprefix("v").split(".")))
 
 
 def cmd_behind(a: argparse.Namespace) -> dict[str, Any]:
@@ -1173,8 +1191,11 @@ def _quiet_on_head(*, reviewer: ModuleType, state: dict[str, Any], checkout: Pat
     quiet = time.time() - started
     if quiet < reviewer.QUIET_AFTER_SECONDS:
         return None
-    if reviewer.still_reviewing(state["bodies"][reviewer.NAME]["comments"]):
-        return None
+    # a note older than the quiet period is left over from a review that never replaced its comment
+    reviewing_since = reviewer.reviewing_since(state["comments"][reviewer.NAME])
+    if reviewing_since is not None:
+        if time.time() - reviewing_since.timestamp() < reviewer.QUIET_AFTER_SECONDS:
+            return None
     return {
         "verdict": "head_not_reviewed",
         "last_reviewed": last,
