@@ -14,3 +14,6 @@ includes:
   copier:
     taskfile: ./.config/taskfiles/copier-template.yaml
     flatten: true
+  github:
+    taskfile: ./.config/taskfiles/github.yaml
+    flatten: true
