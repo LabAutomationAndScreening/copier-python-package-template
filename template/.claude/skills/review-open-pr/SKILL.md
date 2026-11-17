@@ -4,7 +4,7 @@ description: Reviews an open PR with the built-in /code-review, reporting every 
 when_to_use: /review-open-pr, "review this PR and post the findings", "review PR N with all findings", "run the full AI review on the open PR".
 user-invocable: true
 disable-model-invocation: true
-allowed-tools: Bash(gh pr view *), Bash(gh pr list *), Bash(git fetch *), Bash(git rev-parse *), Bash(git status *), Bash(git log *), Bash(git diff *), Bash(git show *), Bash(git grep *), Bash(git merge-base *), Bash(git ls-remote *), Bash(git remote get-url *), Bash(git worktree *), Bash(git branch *), Bash(bd list *), Bash(bd show *), Bash(bd dep *), Bash(.claude/skills/pr-comments/read.py *), Bash(.claude/skills/post-review-findings/post_review.py *), Read, Write, Edit, AskUserQuestion, Skill, SendMessage, EnterWorktree, ExitWorktree
+allowed-tools: Bash(gh pr view *), Bash(gh pr list *), Bash(git fetch *), Bash(git rev-parse *), Bash(git status *), Bash(git log *), Bash(git diff *), Bash(git show *), Bash(git grep *), Bash(git merge-base *), Bash(git ls-remote *), Bash(git remote get-url *), Bash(git worktree *), Bash(git branch *), Bash(bd list *), Bash(bd show *), Bash(bd dep *), Bash(.claude/skills/pr-comments/read.py *), Bash(.claude/skills/post-review-findings/post_review.py *), Read, Write, Edit, AskUserQuestion, Skill, SendMessage
 argument-hint: "[low|medium|high|xhigh|max] [<pr number>]"
 ---
 
@@ -24,8 +24,9 @@ collects every finding the reviewer had, and posts them all on the PR as one rev
   `<repo_root>/tmp/review-open-pr/pr<pr>/` (`tmp/` is gitignored); creating the worktree in Step 1 creates it. It holds:
   - `<brief>`: `<work_dir>/context-brief.md`;
   - `<work_dir>/code-review-findings.json`: the findings array, when the review reports it inline;
-  - `<work_dir>/review-findings.json` and `<work_dir>/review-preview.md`: `/post-review-findings`'
-    `<findings_file>` and `<preview_file>`, which this skill puts here in place of that skill's own paths;
+  - `<work_dir>/review-findings.json`, `<work_dir>/review-preview.md` and `<work_dir>/review-approval.md`:
+    `/post-review-findings`' `<findings_file>`, `<preview_file>` and `<approval_file>`, which this skill puts here
+    in place of that skill's own paths;
   - `<work_dir>/tree`: the worktree pinned to the reviewed commit, created in Step 1, reviewed in Step 3 and
     removed in Step 4.
 - Show every file path to the user as an absolute path.
@@ -53,9 +54,8 @@ git fetch origin <baseRefName> pull/<number>/head
 `pull/<number>/head` is the PR's head as GitHub keeps it on the base repo, so it is there even for a PR from a
 fork, whose branch `origin` doesn't have.
 
-Entering the review's worktree (Step 3) loads the PR's own CLAUDE.md, AGENTS.md and `.claude/` skills into the
-session, and `/code-review` may run its code. When `isCrossRepository` is true (a PR from a fork), ask whether
-the user trusts the PR's author, and stop unless they do.
+`/code-review` may run the PR's code in the review's worktree, such as its tests. When `isCrossRepository` is
+true (a PR from a fork), ask whether the user trusts the PR's author, and stop unless they do.
 
 The **reviewed commit** is `headRefOid`, and the **reviewed base** is `baseRefOid`. Record both now:
 `/post-review-findings` needs the commit, and either may move while the review runs.
@@ -158,17 +158,15 @@ Write `<brief>` with facts only, each with its source (a bead ID, a commit, a pa
 
 ## Step 3: Run the review
 
-`/code-review` reads the session's working directory, uncommitted changes included. So the review runs in the
-worktree from Step 1, which nothing else touches while it runs: enter it with EnterWorktree, passing its `path`.
-If the worktree can't be entered, stop rather than review from anywhere else. While the session is in the
-worktree, Claude Code refuses
-git commands aimed at another checkout, so leave it (ExitWorktree, `keep`) as soon as the review reports, before
-Step 4.
+By default `/code-review` reviews the session's working directory, uncommitted changes included: its diff,
+the files it reads and the agents it starts all use that directory, and a forked review follows the session
+there if it moves mid-review. So the args point the reviewer at the worktree from Step 1 by absolute path,
+and the session stays in the user's checkout, where Steps 4 and 5 run this repo's own scripts.
 
 Invoke the **code-review** skill (Skill tool) with these args:
 
 ```text
-[<level>] --max-findings all <pr> — before reviewing, read the context brief at <absolute path of brief>: the PR description, the existing review threads and, if this PR is a layer of a split branch, its plan and what the upcoming layers add. It is context, not findings.
+[<level>] --max-findings all <pr> — the code under review is checked out at <absolute path of the worktree>, at <reviewed commit>. Run every git command as `git -C <absolute path of the worktree>`, run every test or other command with that path as its working directory, read the code under review only by absolute paths under it, never by relative ones, and give every agent you start this same rule. Before reviewing, read the context brief at <absolute path of brief>: the PR description, the existing review threads and, if this PR is a layer of a split branch, its plan and what the upcoming layers add. It is context, not findings.
 ```
 
 `--max-findings all` stays in effect for later `/code-review` runs too, as `/code-review` documents.
@@ -204,7 +202,7 @@ is the agent's transcript. If the review instead reports its findings inline, wr
 `/post-review-findings` can't be started with the Skill tool (it is user-invoked only), so Read
 `.claude/skills/post-review-findings/SKILL.md` and follow its Steps 1 to 8 in place, with these changes:
 
-- **Conventions**: `<findings_file>` and `<preview_file>` are the paths in `<work_dir>` listed above. Its rule
+- **Conventions**: `<findings_file>`, `<preview_file>` and `<approval_file>` are the paths in `<work_dir>` listed above. Its rule
   to ask before overwriting an existing `<findings_file>` still applies.
 - **Step 1**: the PR and the reviewed commit come from Step 1 here.
 - **Step 3**: add every set-aside candidate from Step 4 as a finding, without asking whether to: the point of

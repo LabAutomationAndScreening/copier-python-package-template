@@ -26,6 +26,9 @@ Verbs (all print JSON on stdout; errors go to stderr with exit 1):
   conflicts [project]                run `task prune-copier-rejects`, then list the .rej
                                      files left and any inline conflict markers
   capture-rej REJ [--root DIR]       emit the report schema's `rejFile` object for one .rej
+  deleted-files [project]            list the files the update deleted, each marked `edited` unless it
+                                     matches the pre-update template version rendered with the saved
+                                     answers, with the commits that touched it
   lint [project]                     sync each uv project (so a dependency-sync hook has nothing
                                      to change), then run the all-files hook runner the way CI does
   commit [project] --draft DRAFT     refuse while any resolution in the draft is below high
@@ -45,8 +48,8 @@ Any verb that takes a project and fails also writes <project>/tmp/copier-update-
 The template clone is a `--mirror` in a cache dir (default $TMPDIR/copier-update-cache) so
 `refs` and `new-questions` share one fetch.
 
-`--stored-gh-credentials` (on `refs`, `new-questions`, `update`, `pr` and `comment-report`) removes GITHUB_TOKEN
-and GH_TOKEN from the environment of every git, gh and task call (and prefixes the command `pr`
+`--stored-gh-credentials` (on `refs`, `new-questions`, `update`, `deleted-files`, `pr` and `comment-report`) removes
+GITHUB_TOKEN and GH_TOKEN from the environment of every git, gh, task and copier call (and prefixes the command `pr`
 prints with `env -u GITHUB_TOKEN -u GH_TOKEN`), so they fall back to the
 credentials `gh auth login` stored. In a GitHub Codespace the injected token only reaches the
 codespace's own repository.
@@ -304,13 +307,17 @@ def read_answers(*, project: Path, answers_file: str | None) -> tuple[str, dict[
     path = project / rel
     if not path.is_file():
         raise FailError(f"answers file not found: {path}")
-    data = {key: _scalar(value) for key, value in _top_level_values(path.read_text(encoding="utf-8")).items()}
+    return rel, _parse_answers(text=path.read_text(encoding="utf-8"), project=project, source=str(path))
+
+
+def _parse_answers(*, text: str, project: Path, source: str) -> dict[str, str]:
+    data = {key: _scalar(value) for key, value in _top_level_values(text).items()}
     if "_src_path" not in data:
-        raise FailError(f"{path} has no _src_path")
+        raise FailError(f"{source} has no _src_path")
     if _is_relative_local_path(data["_src_path"]):
-        # copier reads a relative template path from the project; the mirror is cloned from elsewhere
+        # copier reads a relative template path from the project; the mirror and the old render run from elsewhere
         data["_src_path"] = str((project / data["_src_path"]).resolve())
-    return rel, data
+    return data
 
 
 def _is_relative_local_path(src_path: str) -> bool:
@@ -602,13 +609,17 @@ def _copier_bool(value: str) -> bool:
     return True
 
 
-def _answer_reached(*, saved: str | None, given: str) -> bool:
-    # copier writes a boolean answer as `true` or `false` whatever form `--data` gave it in, such as `True` or `yes`
-    if saved == given:
+def _answer_reached(*, saved_raw: str | None, given: str) -> bool:
+    # copier writes a boolean answer as a bare `true` or `false` whatever form `--data` gave it in, such as `True` or
+    # `yes`. A string answer that reads "true" is saved quoted, as `'true'`, so only the raw, unparsed text tells a
+    # boolean from a string, and a string must match exactly
+    if saved_raw is None:
+        return False
+    if _scalar(saved_raw) == given:
         return True
-    if saved == "true":
+    if saved_raw == "true":
         return _copier_bool(given)
-    if saved == "false":
+    if saved_raw == "false":
         if _copier_bool(given):
             return False
         return True
@@ -650,7 +661,8 @@ def cmd_update(a: argparse.Namespace) -> dict[str, Any]:
     cmd = update_command(project=project, task_name=task_name, task_vars=task_vars, data=data, data_file=a.data_file)
     res = _run(cmd=cmd, cwd=project, stored_gh_credentials=a.stored_gh_credentials)
     _, new_answers = read_answers(project=project, answers_file=answers_file)
-    dropped = [k for k, v in data.items() if not _answer_reached(saved=new_answers.get(k), given=v)]
+    saved_raw = _top_level_values((project / answers_file).read_text(encoding="utf-8"))
+    dropped = [k for k, v in data.items() if not _answer_reached(saved_raw=saved_raw.get(k), given=v)]
     if res.returncode == 0 and dropped:
         raise FailError(f"copier ran but these --data answers did not reach {answers_file}: {', '.join(dropped)}")
     changed = [
@@ -744,6 +756,92 @@ def cmd_conflicts(a: argparse.Namespace) -> dict[str, Any]:
 
 def cmd_capture_rej(a: argparse.Namespace) -> dict[str, Any]:
     return capture_rej(path=Path(a.rej), root=Path(a.root))
+
+
+def deleted_paths(project: Path) -> list[str]:
+    # without --no-renames, a deleted file copier replaced with a similar one shows as a rename and drops out
+    out = _git("diff", "HEAD", "--relative", "--no-renames", "--diff-filter=D", "--name-only", "-z", cwd=project)
+    return [path for path in out.split("\0") if path]
+
+
+def render_old_template(*, project: Path, answers_file: str, dest: Path, stored_gh_credentials: bool) -> str:
+    """Render the template version the project was on before the update into DEST, and return that version.
+
+    The version and the answers come from the answers file as committed in HEAD: the update has already rewritten
+    the working-tree copy with the new version. Copier's update renders the version the project is on from its
+    last answers, tasks included, and diffs that
+    against the project to find the repo's own edits. A file the new version no longer has is deleted whether or
+    not the repo edited it, so comparing it with this render is what tells the two apart. Commit history can't:
+    a repo edit made while resolving an earlier update's conflicts lands inside that update's commit.
+
+    Tasks run because they write text into the files, such as each file's managed-by banner, so skipping them would
+    make nearly every file look edited. A secret answer is never saved, so it renders with its default here; a file
+    that depends on one compares as edited, which costs a decision but never drops an edit.
+    """
+    answers_text = _git("show", f"HEAD:./{answers_file}", cwd=project)
+    answers = _parse_answers(text=answers_text, project=project, source=f"HEAD:{answers_file}")
+    ref = answers.get("_commit")
+    if not ref:
+        raise FailError(f"HEAD:{answers_file} has no _commit, so there is no earlier template version to render")
+    data_file = dest.parent / "answers.yml"
+    _ = data_file.write_text(answers_text, encoding="utf-8")
+    res = _run(
+        cmd=[
+            "copier",
+            "copy",
+            "--vcs-ref",
+            ref,
+            "--data-file",
+            str(data_file),
+            # --data-file only supplies answers; a template can also render the answers file's own location
+            # (`_copier_conf.answers_file`), which falls back to the template's default without this
+            "--answers-file",
+            answers_file,
+            "--defaults",
+            "--trust",
+            "--quiet",
+            answers["_src_path"],
+            str(dest),
+        ],
+        cwd=dest.parent,
+        stored_gh_credentials=stored_gh_credentials,
+    )
+    if res.returncode != 0:
+        raise FailError(f"rendering the template at {ref} failed:\n{(res.stdout + res.stderr).strip()}")
+    return ref
+
+
+def _matches_render(*, project: Path, path: str, render: Path) -> bool:
+    rendered = render / path
+    if not rendered.is_file():
+        return False
+    # --path hashes the render as committing it at that path would: through the project's attributes and filters
+    rendered_blob = _git("hash-object", f"--path={path}", str(rendered), cwd=project).strip()
+    if rendered_blob == _git("rev-parse", f"HEAD:./{path}", cwd=project).strip():
+        return True
+    return False
+
+
+def cmd_deleted_files(a: argparse.Namespace) -> dict[str, Any]:
+    project = Path(a.project)
+    answers_file = resolve_answers_file(project=project, answers_file=a.answers_file)
+    deleted = deleted_paths(project)
+    if not deleted:
+        return {"answers_file": answers_file, "from_version": None, "deleted": []}
+    with tempfile.TemporaryDirectory(prefix="copier-update-old-render.") as tmp:
+        render = Path(tmp) / "render"
+        from_version = render_old_template(
+            project=project, answers_file=answers_file, dest=render, stored_gh_credentials=a.stored_gh_credentials
+        )
+        files = [
+            {
+                "path": path,
+                "edited": not _matches_render(project=project, path=path, render=render),
+                "commits": _git("log", "--follow", "--format=%h %s", "--", path, cwd=project).splitlines(),
+            }
+            for path in deleted
+        ]
+    return {"answers_file": answers_file, "from_version": from_version, "deleted": files}
 
 
 def detect_lint(project: Path) -> dict[str, Any] | None:
@@ -1289,6 +1387,8 @@ def _parser() -> argparse.ArgumentParser:
     up.add_argument("--data", action="append", default=[], metavar="KEY=VALUE")
     up.add_argument("--data-file", default=None)
     _ = verb(name="conflicts", fn=cmd_conflicts)
+    df = verb(name="deleted-files", fn=cmd_deleted_files, remote=True)
+    df.add_argument("--answers-file", default=None, help="relative to project; discovered when omitted")
     _ = verb(name="lint", fn=cmd_lint)
     cm = verb(name="commit", fn=cmd_commit)
     cm.add_argument("--draft", required=True, help="the resolution draft; its confidences gate the commit")
