@@ -73,9 +73,10 @@ workflows never run on pull requests, therefore never reaches either and times o
 
 Right after a push, GitHub can still report the previous commit as the PR's head, with that commit's finished checks.
 So while the PR is open, checks count only once its head is the awaited commit: --sha when given; otherwise, when the
-PR's branch is the one checked out here (and --repo isn't given), the local HEAD, which must already be pushed;
-otherwise whatever head GitHub shows. That choice is settled once, on the first poll that reads the PR, so a commit
-pushed while waiting doesn't change what is awaited.
+PR's branch is the one checked out here (and --repo isn't given), the local HEAD, which must already be pushed. Which
+commit that is gets settled once, on the first poll that reads the PR, so a commit pushed while waiting doesn't change
+what is awaited. With neither, no commit is known to await, so each poll follows whatever head GitHub shows then;
+pinning the first head GitHub reports could pin the previous commit, for the reason above.
 
 If the PR's head moves past the awaited commit instead (a later push, a commit CI itself pushes, "Update branch", a
 force-push), that commit's own CI still finishes, so the wait switches to commit mode's rules for it, and every line
@@ -452,8 +453,12 @@ def _is_failure(*, check: _Check) -> bool:
 def _failed_check_names(*, checks: list[_Check], required_checks: list[_Check]) -> list[str]:
     required_names = {check.name for check in required_checks}
     names: list[str] = []
-    for check in checks:
+    # the two lists come from separate `gh pr checks` calls, so a required check still pending in the first can have
+    # failed by the second, and _passed_result only rejects a pending one
+    for check in [*checks, *required_checks]:
         if not _is_failure(check=check):
+            continue
+        if check.name in names:
             continue
         if check.workflow != "":
             names.append(check.name)
@@ -713,9 +718,11 @@ def _head_poll(
         # polls while checks are still pending cost no extra call
         if exit_code != 0:
             return result
-        runs_detail = _pr_runs_detail(
+        runs_result, runs_detail = _pr_runs_outcome(
             commit_sha=pr_state.head_sha, repo=target.repo, env=gh_env, deadline=target.deadline
         )
+        if runs_result is not None:
+            return runs_result
         if runs_detail is None:
             return result
     state.timeout_detail = _pr_timeout_detail(
@@ -739,9 +746,11 @@ def _merge_grace(
 ) -> tuple[tuple[str, int] | None, str | None]:
     if not _awaiting_merge(snapshot=snapshot):
         return None, None
-    runs_detail = _pr_runs_detail(
+    runs_result, runs_detail = _pr_runs_outcome(
         commit_sha=snapshot.pr.head_sha, repo=target.repo, env=gh_env, deadline=target.deadline
     )
+    if runs_result is not None:
+        return runs_result, None
     if runs_detail is not None:
         return None, runs_detail
     state.merge_wait_polls += 1
@@ -843,14 +852,31 @@ def _unfinished_runs_detail(*, runs: list[_Run], commit_sha: str) -> str | None:
     return None
 
 
-def _pr_runs_detail(*, commit_sha: str, repo: str | None, env: dict[str, str], deadline: float) -> str | None:
+def _failed_completed_runs(*, runs: list[_Run]) -> list[_Run]:
+    failed: list[_Run] = []
+    for run in runs:
+        if run.status != "completed":
+            continue
+        if _is_failed_conclusion(conclusion=run.conclusion):
+            failed.append(run)
+    return failed
+
+
+def _pr_runs_outcome(
+    *, commit_sha: str, repo: str | None, env: dict[str, str], deadline: float
+) -> tuple[tuple[str, int] | None, str | None]:
     runs = _runs(commit_sha=commit_sha, repo=repo, env=env, deadline=deadline)
+    # success is judged on the required checks, so a job outside them that was still pending in the checks snapshot can
+    # have failed and finished its run since; only the runs read now show it
+    failed = _failed_job_names(runs=_failed_completed_runs(runs=runs), repo=repo, env=env, deadline=deadline)
+    if len(failed) > 0:
+        return (f"CHECKS_FAILED: {', '.join(failed)}", 1), None
     unfinished = _unfinished_runs_detail(runs=runs, commit_sha=commit_sha)
     if unfinished is not None:
-        return unfinished
+        return None, unfinished
     if not _any_pull_request_run(runs=runs):
-        return f"no pull_request run for {commit_sha} yet"
-    return None
+        return None, f"no pull_request run for {commit_sha} yet"
+    return None, None
 
 
 def _commit_to_await(*, sha: str | None) -> str:
