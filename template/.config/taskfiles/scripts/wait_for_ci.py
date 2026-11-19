@@ -16,14 +16,17 @@ CircleCI, an App) aren't reliably waited on.
 Result lines and exit codes, in PR mode unless marked otherwise:
 
 - MERGED (0)
-- CHECKS_PASSED (0): every required check passed and auto-merge is off, so nothing more happens without a person
+- CHECKS_PASSED (0): every required check passed and auto-merge is off, so nothing more happens without a person. A
+  PR in a merge queue is waited on instead, since it is on its way to merging: `gh pr merge` queues a PR whose checks
+  have passed without turning auto-merge on
 - CI_PASSED_MERGE_BLOCKED: <check>: <its description> (0): every GitHub Actions check finished without a failure, but a
   required commit status was posted as pending, which holds the merge on purpose (such as a copier template not yet
   on a release tag). Exit 0 means CI passed, not that the PR can merge. Only a status that GitHub Actions posted
   counts as a hold: once every Actions run has finished, one it left pending can only be deliberate. Only the first
   pending required status is looked at, so one from other CI is taken as still running only when it comes first.
-- CI_PASSED_MERGE_BLOCKED: reviewDecision=<decision> (0): with auto-merge on, CI passed but the merge waits on a review
-  (REVIEW_REQUIRED or CHANGES_REQUESTED), so it won't happen without a person
+- CI_PASSED_MERGE_BLOCKED: reviewDecision=<decision> (0): with auto-merge on, CI passed but the PR still hasn't merged
+  a minute later, and a review is pending (REVIEW_REQUIRED or CHANGES_REQUESTED), so it won't happen without a person.
+  Waited for like any other hold, because someone allowed to bypass the review requirement merges without one
 - CI_PASSED_MERGE_BLOCKED: mergeStateStatus=<status> (0): with auto-merge on, CI passed but the PR still hasn't merged
   a minute later, so something else holds it (a ruleset, unresolved conversations, a deployment gate)
 - CLOSED (1)
@@ -50,10 +53,14 @@ Commit mode (no PR given) waits on every GitHub Actions workflow run for one com
 --sha (expanded through GitHub when abbreviated, since the `gh run list` filter only matches a full SHA), or else the
 pushed local HEAD. Its result lines:
 
-- CHECKS_PASSED (0): at least one run exists and every run completed without a failed job. When the commit is the head
-  of an open PR, a pull_request run must also exist: a push to a PR's branch triggers both a push run and a
-  pull_request run, and CI may skip the push run's jobs as a duplicate, so the push run can finish before the
-  pull_request run that does the work has even been created.
+- CHECKS_PASSED (0): at least one run exists, every run completed without a failed job, and the next poll found no
+  further run, since a workflow can start after another has finished (one triggered by workflow_run, say), which
+  costs one poll on every pass. When the commit is the head of an open PR whose CI runs on pull requests, a
+  pull_request run must also exist: a push to a PR's branch triggers both a push run and a pull_request run, and CI
+  may skip the push run's jobs as a duplicate, so the push run can finish before the pull_request run that does the
+  work has even been created. CI counts as running on pull requests once the PR's branch has had a pull_request run
+  since the PR was opened, which such CI gets as the PR opens; CI that runs only on push never has one, so its push
+  runs alone decide.
 - CHECKS_FAILED: <job names> (1): a job concluded failure, cancelled, timed_out or startup_failure; reported as soon as
   the job finishes, without waiting for the rest of its run. A run that never ran its jobs, because it awaits approval
   (action_required) or GitHub gave up on it (stale), is listed as `<workflow> (<conclusion>)`.
@@ -66,10 +73,10 @@ between one job finishing and the next starting. A repo with no required checks 
 CHECKS_PASSED and times out. Failures are still caught from every check, so they are reported as soon as they happen.
 Required checks alone can still pass early, when a required status is posted at the start of CI or when the required
 checks are individual jobs that don't exist yet, so CHECKS_PASSED and CI_PASSED_MERGE_BLOCKED also wait until every
-GitHub Actions workflow run for the head commit has completed: a run completes only after all of its jobs. At least
-one of them must be a pull_request (or pull_request_target) run, since a push run may be all CI has created so far and
-can count its skipped duplicate jobs as passing. A repo with no Actions workflows (only third-party CI), or whose
-workflows never run on pull requests, therefore never reaches either and times out.
+GitHub Actions workflow run for the head commit has completed: a run completes only after all of its jobs. When the
+PR's CI runs on pull requests (as commit mode judges it), at least one of them must be a pull_request (or
+pull_request_target) run, since a push run may be all CI has created so far and can count its skipped duplicate jobs as
+passing. A repo with no Actions workflows (only third-party CI) therefore never reaches either and times out.
 
 Right after a push, GitHub can still report the previous commit as the PR's head, with that commit's finished checks.
 So while the PR is open, checks count only once its head is the awaited commit: --sha when given; otherwise, when the
@@ -81,8 +88,8 @@ pinning the first head GitHub reports could pin the previous commit, for the rea
 If the PR's head moves past the awaited commit instead (a later push, a commit CI itself pushes, "Update branch", a
 force-push), that commit's own CI still finishes, so the wait switches to commit mode's rules for it, and every line
 then ends with "(PR head has since moved to <sha>)". A pull_request run is required unless every push run for the
-commit started before the PR was opened: until then no PR existed for CI to treat the push run as a duplicate of, so
-the push run really ran the jobs.
+commit started before the PR was opened (until then no PR existed for CI to treat the push run as a duplicate of, so
+the push run really ran the jobs) or the PR's CI doesn't run on pull requests.
 The PR's merge state, auto-merge and holds belong to the new head, so they no longer count. A head GitHub shows as
 behind the awaited commit means the push isn't registered yet, so the wait goes on.
 
@@ -516,10 +523,8 @@ def _passed_result(*, snapshot: _PrSnapshot) -> tuple[str, int] | None:
         return None
     if not snapshot.pr.auto_merge_on:
         return "CHECKS_PASSED", 0
-    # With auto-merge on, the merge itself is the outcome, unless something besides CI holds it; a review is the usual
-    # hold, and the one GitHub reports directly.
-    if _review_blocks_merge(review_decision=snapshot.pr.review_decision):
-        return f"CI_PASSED_MERGE_BLOCKED: reviewDecision={snapshot.pr.review_decision}", 0
+    # With auto-merge on, the merge itself is the outcome; _merge_grace waits for it, and names what holds it if it
+    # doesn't come.
     return None
 
 
@@ -554,11 +559,25 @@ class _RepoAccess:
 
 
 @dataclass(frozen=True)
+class _OpenPr:
+    number: int
+    branch: str
+    created_at: str
+
+
+@dataclass(frozen=True)
 class _Superseded:
     gh_env: dict[str, str]
     awaited_sha: str
     head_sha: str
-    pr_created_at: str
+    pr: _OpenPr
+
+
+@dataclass(frozen=True)
+class _PassingSample:
+    run_ids: frozenset[int]
+    # time.monotonic() when the sample was taken
+    taken_at: float
 
 
 @dataclass
@@ -574,6 +593,9 @@ class _PollState:
     superseded: _Superseded | None = None
     # polls since the switch that found no workflow runs at all for the superseded commit
     empty_run_polls: int = 0
+    # the runs a commit's last poll found all completed and passing, which a poll a full POLL_SECONDS later must find
+    # unchanged
+    passing_sample: _PassingSample | None = None
     # polls with auto-merge on and CI fully passed that found the PR still unmerged
     merge_wait_polls: int = 0
     # what the TIMED_OUT line adds about why nothing settled, as of the latest successful poll
@@ -643,13 +665,17 @@ def _supersession(
     # registered the push of the awaited commit yet.
     if status == "ahead":
         return _Superseded(
-            gh_env=env, awaited_sha=expected_sha, head_sha=pr_state.head_sha, pr_created_at=pr_state.created_at
+            gh_env=env, awaited_sha=expected_sha, head_sha=pr_state.head_sha, pr=_open_pr(pr_state=pr_state)
         )
     if status == "diverged":
         return _Superseded(
-            gh_env=env, awaited_sha=expected_sha, head_sha=pr_state.head_sha, pr_created_at=pr_state.created_at
+            gh_env=env, awaited_sha=expected_sha, head_sha=pr_state.head_sha, pr=_open_pr(pr_state=pr_state)
         )
     return None
+
+
+def _open_pr(*, pr_state: _PrState) -> _OpenPr:
+    return _OpenPr(number=pr_state.number, branch=pr_state.head_branch, created_at=pr_state.created_at)
 
 
 def _superseded_result(*, target: _Target, superseded: _Superseded, state: _PollState) -> tuple[str, int] | None:
@@ -657,7 +683,7 @@ def _superseded_result(*, target: _Target, superseded: _Superseded, state: _Poll
         commit_sha=superseded.awaited_sha,
         access=_RepoAccess(repo=target.repo, gh_env=superseded.gh_env, deadline=target.deadline),
         state=state,
-        pr_created_at=superseded.pr_created_at,
+        superseding_pr=superseded.pr,
     )
     suffix = f" (PR head has since moved to {superseded.head_sha})"
     if state.timeout_detail is not None:
@@ -719,16 +745,32 @@ def _head_poll(
         if exit_code != 0:
             return result
         runs_result, runs_detail = _pr_runs_outcome(
-            commit_sha=pr_state.head_sha, repo=target.repo, env=gh_env, deadline=target.deadline
+            pr_state=pr_state, access=_RepoAccess(repo=target.repo, gh_env=gh_env, deadline=target.deadline)
         )
         if runs_result is not None:
             return runs_result
         if runs_detail is None:
-            return result
+            queue_detail = _queue_holding_pass(result=result, pr_state=pr_state, env=gh_env, deadline=target.deadline)
+            if queue_detail is None:
+                return result
     state.timeout_detail = _pr_timeout_detail(
         snapshot=snapshot, runs_detail=runs_detail, hold_detail=hold_detail, queue_detail=queue_detail
     )
     return None
+
+
+def _queue_holding_pass(
+    *, result: tuple[str, int], pr_state: _PrState, env: dict[str, str], deadline: float
+) -> str | None:
+    """Return the merge queue entry of a PR about to be reported CHECKS_PASSED, or None when it isn't queued.
+
+    `gh pr merge` puts a PR whose checks have passed straight into a merge queue without turning auto-merge on, so a
+    queued PR looks like one nobody is merging; it is on its way, and waited on like an auto-merging one.
+    """
+    line, _ = result
+    if line != "CHECKS_PASSED":
+        return None
+    return _merge_queue_detail(pr_state=pr_state, env=env, deadline=deadline)
 
 
 def _awaiting_merge(*, snapshot: _PrSnapshot) -> bool:
@@ -747,7 +789,7 @@ def _merge_grace(
     if not _awaiting_merge(snapshot=snapshot):
         return None, None
     runs_result, runs_detail = _pr_runs_outcome(
-        commit_sha=snapshot.pr.head_sha, repo=target.repo, env=gh_env, deadline=target.deadline
+        pr_state=snapshot.pr, access=_RepoAccess(repo=target.repo, gh_env=gh_env, deadline=target.deadline)
     )
     if runs_result is not None:
         return runs_result, None
@@ -756,13 +798,17 @@ def _merge_grace(
     state.merge_wait_polls += 1
     if state.merge_wait_polls < MERGE_GRACE_POLLS:
         return None, None
+    # A pending review is no reason to stop waiting sooner: auto-merge enabled by someone allowed to bypass the review
+    # requirement merges without one, and reviewDecision still reads REVIEW_REQUIRED after it has.
+    if _review_blocks_merge(review_decision=snapshot.pr.review_decision):
+        return (f"CI_PASSED_MERGE_BLOCKED: reviewDecision={snapshot.pr.review_decision}", 0), None
     return (f"CI_PASSED_MERGE_BLOCKED: mergeStateStatus={snapshot.pr.merge_state_status}", 0), None
 
 
 _MERGE_QUEUE_QUERY = """
 query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
-    pullRequest(number: $number) { isInMergeQueue mergeQueueEntry { position state } }
+    pullRequest(number: $number) { state isInMergeQueue mergeQueueEntry { position state } }
   }
 }
 """
@@ -786,8 +832,11 @@ def _merge_queue_detail(*, pr_state: _PrState, env: dict[str, str], deadline: fl
         "-F",
         f"number={pr_state.number}",
         "--jq",
+        # a queued PR can merge between this poll's `gh pr view` and this query, which then finds no queue entry; it is
+        # reported as still on its way, so the next poll reads MERGED instead of this one reporting it unmerged
         ".data.repository.pullRequest"
-        ' | if .isInMergeQueue then "in merge queue (position \\(.mergeQueueEntry.position), \\(.mergeQueueEntry.state))"'
+        ' | if .state == "MERGED" then "merged since this poll read it as open"'
+        ' elif .isInMergeQueue then "in merge queue (position \\(.mergeQueueEntry.position), \\(.mergeQueueEntry.state))"'
         ' else "" end',
         env=env,
         deadline=deadline,
@@ -862,21 +911,60 @@ def _failed_completed_runs(*, runs: list[_Run]) -> list[_Run]:
     return failed
 
 
-def _pr_runs_outcome(
-    *, commit_sha: str, repo: str | None, env: dict[str, str], deadline: float
-) -> tuple[tuple[str, int] | None, str | None]:
-    runs = _runs(commit_sha=commit_sha, repo=repo, env=env, deadline=deadline)
+def _pr_runs_outcome(*, pr_state: _PrState, access: _RepoAccess) -> tuple[tuple[str, int] | None, str | None]:
+    commit_sha = pr_state.head_sha
+    runs = _runs(commit_sha=commit_sha, repo=access.repo, env=access.gh_env, deadline=access.deadline)
     # success is judged on the required checks, so a job outside them that was still pending in the checks snapshot can
     # have failed and finished its run since; only the runs read now show it
-    failed = _failed_job_names(runs=_failed_completed_runs(runs=runs), repo=repo, env=env, deadline=deadline)
+    failed = _failed_job_names(
+        runs=_failed_completed_runs(runs=runs), repo=access.repo, env=access.gh_env, deadline=access.deadline
+    )
     if len(failed) > 0:
         return (f"CHECKS_FAILED: {', '.join(failed)}", 1), None
     unfinished = _unfinished_runs_detail(runs=runs, commit_sha=commit_sha)
     if unfinished is not None:
         return None, unfinished
     if not _any_pull_request_run(runs=runs):
-        return None, f"no pull_request run for {commit_sha} yet"
+        if _pull_request_runs_expected(pr=_open_pr(pr_state=pr_state), access=access):
+            return None, f"no pull_request run for {commit_sha} yet"
     return None, None
+
+
+def _pull_request_runs_expected(*, pr: _OpenPr, access: _RepoAccess) -> bool:
+    """Judge whether the PR's CI runs on pull_request events.
+
+    It does once the PR's branch has had a pull_request run since the PR was opened. CI that runs on pull requests gets
+    one as soon as the PR opens, so every later commit is held to it. CI that runs only on push never gets one, and
+    holding it to one would wait until the deadline. A PR too new to have its first pull_request run yet can only head a
+    commit pushed before it was opened, whose push runs had no PR to skip their jobs as duplicates of, so they really
+    ran them.
+    """
+    completed = _gh(
+        "run",
+        "list",
+        "--branch",
+        pr.branch,
+        *_repo_args(repo=access.repo),
+        "--limit",
+        "100",
+        "--json",
+        "event,createdAt",
+        env=access.gh_env,
+        deadline=access.deadline,
+    )
+    if completed.returncode != 0:
+        raise _gh_failure(completed=completed)
+    command = "gh run list --branch"
+    error = _unexpected_output(command=command, stdout=completed.stdout)
+    opened_at = datetime.datetime.fromisoformat(pr.created_at)
+    for item in _json_objects(command=command, stdout=completed.stdout):
+        event = _string_field(obj=item, key="event", error=error)
+        if not _is_pull_request_event(event=event):
+            continue
+        if datetime.datetime.fromisoformat(_string_field(obj=item, key="createdAt", error=error)) < opened_at:
+            continue
+        return True
+    return False
 
 
 def _commit_to_await(*, sha: str | None) -> str:
@@ -941,37 +1029,42 @@ def _runs(*, commit_sha: str, repo: str | None, env: dict[str, str], deadline: f
     ]
 
 
-def _open_prs_headed_at(*, commit_sha: str, repo: str | None, env: dict[str, str], deadline: float) -> list[int]:
+def _open_prs_headed_at(*, commit_sha: str, access: _RepoAccess) -> list[_OpenPr]:
     completed = _gh(
         "api",
-        f"repos/{_api_repo_path(repo=repo)}/commits/{commit_sha}/pulls",
+        f"repos/{_api_repo_path(repo=access.repo)}/commits/{commit_sha}/pulls",
         "--jq",
-        f'[.[] | select(.state == "open") | select(.head.sha == "{commit_sha}") | .number]',
-        env=env,
-        deadline=deadline,
+        f'[.[] | select(.state == "open") | select(.head.sha == "{commit_sha}")'
+        " | {number, branch: .head.ref, created_at}]",
+        env=access.gh_env,
+        deadline=access.deadline,
     )
     if completed.returncode != 0:
         raise _gh_failure(completed=completed)
     command = "gh api repos/.../commits/.../pulls"
     error = _unexpected_output(command=command, stdout=completed.stdout)
-    parsed = _parse_json(command=command, stdout=completed.stdout)
-    if not isinstance(parsed, list):
-        raise error
-    numbers: list[int] = []
-    item: object  # isinstance only narrows parsed to a list of unknowns; object is true of any JSON value
-    for item in parsed:
-        if not isinstance(item, int):
-            raise error
-        numbers.append(item)
-    return numbers
+    return [
+        _OpenPr(
+            number=_int_field(obj=item, key="number", error=error),
+            branch=_string_field(obj=item, key="branch", error=error),
+            created_at=_string_field(obj=item, key="created_at", error=error),
+        )
+        for item in _json_objects(command=command, stdout=completed.stdout)
+    ]
 
 
 def _any_pull_request_run(*, runs: list[_Run]) -> bool:
     for run in runs:
-        if run.event == "pull_request":
+        if _is_pull_request_event(event=run.event):
             return True
-        if run.event == "pull_request_target":
-            return True
+    return False
+
+
+def _is_pull_request_event(*, event: str) -> bool:
+    if event == "pull_request":
+        return True
+    if event == "pull_request_target":
+        return True
     return False
 
 
@@ -1014,11 +1107,18 @@ def _failed_job_names(*, runs: list[_Run], repo: str | None, env: dict[str, str]
         if run.status == "completed":
             if not _is_failed_conclusion(conclusion=run.conclusion):
                 continue
-        run_failures = [
-            job.name
-            for job in _jobs(run_id=run.run_id, repo=repo, env=env, deadline=deadline)
-            if _is_failed_conclusion(conclusion=job.conclusion)
-        ]
+        try:
+            jobs = _jobs(run_id=run.run_id, repo=repo, env=env, deadline=deadline)
+        except GhCallFailedError:
+            # a failure already known decides the verdict, so a lookup error must not cost it: a run listed as completed
+            # here has failed (passing ones were skipped above), and its jobs only name the failure
+            if run.status == "completed":
+                names.append(f"{run.workflow_name} ({run.conclusion})")
+                continue
+            if len(names) > 0:
+                return names
+            raise
+        run_failures = [job.name for job in jobs if _is_failed_conclusion(conclusion=job.conclusion)]
         # a run can fail before any job exists, such as on an invalid workflow file
         if len(run_failures) == 0:
             if run.status == "completed":
@@ -1045,50 +1145,77 @@ def _commit_poll(*, sha: str, repo: str | None, deadline: float, state: _PollSta
         commit_sha=commit_sha,
         access=_RepoAccess(repo=repo, gh_env=gh_env, deadline=deadline),
         state=state,
-        pr_created_at=None,
+        superseding_pr=None,
     )
 
 
 def _commit_result(
-    *, commit_sha: str, access: _RepoAccess, state: _PollState, pr_created_at: str | None
+    *, commit_sha: str, access: _RepoAccess, state: _PollState, superseding_pr: _OpenPr | None
 ) -> tuple[str, int] | None:
     """Judge one commit's CI from its workflow runs.
 
-    pr_created_at is None in commit mode. In PR mode it is the creation time of the PR whose head has moved past this
-    commit, which brings in the rules for a superseded commit: no runs at all for a few polls means it was never the
-    tip of a push, and a pull_request run is required only if the commit was pushed while the PR existed.
+    superseding_pr is None in commit mode. In PR mode it is the PR whose head has moved past this commit, which brings
+    in the rules for a superseded commit: no runs at all for a few polls means it was never the tip of a push, and a
+    pull_request run is required only if the commit was pushed while the PR existed.
     """
     runs = _runs(commit_sha=commit_sha, repo=access.repo, env=access.gh_env, deadline=access.deadline)
     failed = _failed_job_names(runs=runs, repo=access.repo, env=access.gh_env, deadline=access.deadline)
     if len(failed) > 0:
         return f"CHECKS_FAILED: {', '.join(failed)}", 1
-    if pr_created_at is not None:
+    if superseding_pr is not None:
         if len(runs) == 0:
             state.empty_run_polls += 1
             if state.empty_run_polls >= NO_RUNS_GRACE_POLLS:
                 return f"NO_RUNS: {commit_sha} was never the tip of a push, so CI never ran on it", 1
+    # a pass is confirmed only by two polls in a row that both reach it, so any poll that doesn't (a run rerunning, say)
+    # drops the sample
     state.timeout_detail = _unfinished_runs_detail(runs=runs, commit_sha=commit_sha)
     if state.timeout_detail is not None:
+        state.passing_sample = None
         return None
     if not _any_pull_request_run(runs=runs):
         state.timeout_detail = _missing_pull_request_run_detail(
-            commit_sha=commit_sha, access=access, runs=runs, pr_created_at=pr_created_at
+            commit_sha=commit_sha, access=access, runs=runs, superseding_pr=superseding_pr
         )
         if state.timeout_detail is not None:
+            state.passing_sample = None
             return None
+    return _confirmed_pass(state=state, runs=runs, commit_sha=commit_sha)
+
+
+def _confirmed_pass(*, state: _PollState, runs: list[_Run], commit_sha: str) -> tuple[str, int] | None:
+    # a workflow can start after another has finished (one triggered by workflow_run, say), so a pass counts only once
+    # the next poll finds no run beyond these
+    run_ids = frozenset(run.run_id for run in runs)
+    if state.passing_sample is None:
+        return _take_passing_sample(state=state, run_ids=run_ids, commit_sha=commit_sha)
+    if state.passing_sample.run_ids != run_ids:
+        return _take_passing_sample(state=state, run_ids=run_ids, commit_sha=commit_sha)
+    # the poll loop cuts its last sleep short at the deadline, so a confirming poll can come early; one that does
+    # confirms nothing, and the wait times out instead
+    if time.monotonic() - state.passing_sample.taken_at < POLL_SECONDS:
+        state.timeout_detail = f"confirming no further workflow runs start for {commit_sha}"
+        return None
     return "CHECKS_PASSED", 0
 
 
+def _take_passing_sample(*, state: _PollState, run_ids: frozenset[int], commit_sha: str) -> None:
+    state.passing_sample = _PassingSample(run_ids=run_ids, taken_at=time.monotonic())
+    state.timeout_detail = f"confirming no further workflow runs start for {commit_sha}"
+
+
 def _missing_pull_request_run_detail(
-    *, commit_sha: str, access: _RepoAccess, runs: list[_Run], pr_created_at: str | None
+    *, commit_sha: str, access: _RepoAccess, runs: list[_Run], superseding_pr: _OpenPr | None
 ) -> str | None:
-    if pr_created_at is not None:
-        if _push_runs_predate(runs=runs, moment=pr_created_at):
+    if superseding_pr is not None:
+        if _push_runs_predate(runs=runs, moment=superseding_pr.created_at):
+            return None
+        if not _pull_request_runs_expected(pr=superseding_pr, access=access):
             return None
         return f"no pull_request run for {commit_sha} yet"
-    open_prs = _open_prs_headed_at(commit_sha=commit_sha, repo=access.repo, env=access.gh_env, deadline=access.deadline)
-    if len(open_prs) > 0:
-        return f"PR #{open_prs[0]} is open for {commit_sha} but no pull_request run has appeared"
+    for open_pr in _open_prs_headed_at(commit_sha=commit_sha, access=access):
+        if _pull_request_runs_expected(pr=open_pr, access=access):
+            return f"PR #{open_pr.number} is open for {commit_sha} but no pull_request run has appeared"
     return None
 
 
@@ -1146,6 +1273,8 @@ def _poll_until_settled(
         except GhNotFoundError as e:
             return f"GH_NOT_FOUND: {e}", 1
         except GhCallFailedError as e:
+            # a confirmed pass takes two polls in a row that reach it, and this one didn't
+            state.passing_sample = None
             consecutive_failed_polls += 1
             if consecutive_failed_polls >= MAX_CONSECUTIVE_FAILED_POLLS:
                 return f"GH_UNREACHABLE: {e}", 1
