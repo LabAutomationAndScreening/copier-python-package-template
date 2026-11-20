@@ -31,7 +31,9 @@ DOWNLOAD_TIMEOUT_SECONDS = 90
 # touches the network is retried with exponential backoff before the job is failed.
 NETWORK_ATTEMPTS = 4
 FIRST_RETRY_DELAY_SECONDS = 5
-# --fail turns an HTTP error into a non-zero exit instead of saving the error page as the download
+# --fail turns an HTTP error into a non-zero exit instead of saving the error page as the download. Instead of a cap on
+# the whole transfer, which a large archive on a slow but working link can't meet, curl gives up only once the transfer
+# stalls: under 10 KiB/s for 30 seconds straight.
 CURL_DOWNLOAD_ARGS = [
     "--fail",
     "--silent",
@@ -41,8 +43,10 @@ CURL_DOWNLOAD_ARGS = [
     "=https",
     "--connect-timeout",
     "20",
-    "--max-time",
-    "60",
+    "--speed-limit",
+    "10240",
+    "--speed-time",
+    "30",
 ]
 # Where uv places both itself and the executables of the tools it installs. Resolves from USERPROFILE
 # on Windows, so it matches the runner's home directory without assuming its user name. Already on
@@ -407,8 +411,8 @@ def main():
         uv_path = str(LOCAL_BIN_DIR / "uv")
     else:
         uv_path = "uv"
-    install_uv(uv_path=uv_path, uv_env=uv_env, is_windows=is_windows)
     install_pre_commit_tooling = should_install(requested=args.install_pre_commit_tooling)
+    install_uv(uv_path=uv_path, uv_env=uv_env, is_windows=is_windows)
     if not args.no_python:
         if should_install(requested=args.install_copier):
             run_with_retries(
