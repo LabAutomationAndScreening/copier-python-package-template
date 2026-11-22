@@ -60,7 +60,7 @@ user named a skill, only the sessions whose first command is that skill.
 
 - **Exactly one candidate**: watch it, and tell the user which session it is (its command, args and working
   directory).
-- **Several**: write them to `<repo_root>/tmp/watch-skill-run-candidates.md` first, one line each with what
+- **Several**: write them to `/tmp/<repo name>-<skill>-watch-candidates.md` first (`<repo name>` the NAME in this repo's OWNER/NAME, `<skill>` the skill the user named, or `any`), one line each with what
   tells them apart (session ID, last write, working directory, command and args), then ask with one
   AskUserQuestion: an option per candidate, labelled by those details. With more than four, give the four most
   recent as options and point at the file for the rest, which the user picks with "Other".
@@ -80,7 +80,7 @@ If the session ran `/clear`, a new session ID takes over; `sessions` shows it wi
 - Earlier watch notes for this skill (the markdown file, or `bd list --all --type epic --json` for earlier
   watch epics): list the findings still open, so this run can say whether each recurred, was fixed or didn't
   come up.
-- The project's agent rules (`AGENTS.md`, `CLAUDE.md`), since the watched session should follow them too.
+- The project's agent rules (`AGENTS.md`, `CLAUDE.md`, the files under `.claude/rules/`), since the watched session should follow them too.
 
 ## Step 4: Follow the run
 
