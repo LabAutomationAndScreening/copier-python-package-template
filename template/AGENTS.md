@@ -1,10 +1,10 @@
 # Project Structure
 
-What this repository is and how it is laid out is described in a rule file the repository owns under `.claude/rules/`, which loads alongside this file. This file is the same in every repository generated from this template chain, so guidance for a single repository never goes here (see Memory and Rules).
+What this repository is and how it is laid out is described in a rule file under `.claude/rules/`, which loads alongside this file. This file is the same in every repository generated from this template chain, so guidance for a single repository never goes here (see Memory and Rules).
 
 # Code Guidelines
 
-Rules for writing code and tests live in `.claude/rules/*.md`. Each file's `paths:` frontmatter lists the files it governs, and Claude Code loads the file when you read or write one of them. That can come too late, or not at all: a rule for a file you are creating loads only after the first write, and no rule loads for code you see only through a diff or other command output (as in a review), or for files in another checkout, where that checkout's own `.claude/rules/` apply. In those cases, first read the rule files whose `paths:` match the code.
+Rules for writing code and tests live in `.claude/rules/*.md`. Each file's `paths:` frontmatter lists the files it governs, and Claude Code loads the file when you read or write one of them. That can come too late, or not at all: a rule for a file you are creating loads only after the first write, and no rule loads for code you see only through a diff or other command output (as in a review), or for files in another checkout, where that checkout's own `.claude/rules/` apply. In those cases, first read the rule files whose `paths:` match the code, and in another checkout also its rule files that have no `paths:`, which apply to the whole checkout.
 
 # Agent Implementations & Configurations
 
